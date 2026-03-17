@@ -1,0 +1,96 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc(uid) {
+      return get(/databases/$(database)/documents/users/$(uid));
+    }
+
+    function currentRole() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : null;
+    }
+
+    function isAdmin() {
+      return currentRole() == 'admin';
+    }
+
+    function isCoach() {
+      let role = currentRole();
+      return role == 'coach' || role == 'admin';
+    }
+
+    function isStudent() {
+      let role = currentRole();
+      return role == 'student';
+    }
+
+    match /users/{userId} {
+      // Allow public read access to coach/admin profiles (public-facing),
+      // while keeping stricter rules for other user documents.
+      allow read: if resource.data.role in ['coach', 'admin'] || (
+        isSignedIn() && (
+          userId == request.auth.uid ||
+          isCoach()
+        )
+      );
+
+      allow create: if isSignedIn() && userId == request.auth.uid;
+
+      // Students can update their own profile info.
+      // Coaches/admins can update any user.
+      allow update: if isSignedIn() && (
+        (userId == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'email', 'photoURL'])) ||
+        isCoach()
+      );
+
+      allow delete: if false;
+    }
+
+    match /plans/{planId} {
+      // Plans are public-facing; allow read for everyone so landing page works
+      // without requiring authentication.
+      allow read: if true;
+      allow create, update, delete: if isCoach();
+    }
+
+    match /checkins/{checkinId} {
+      allow read: if isSignedIn();
+
+      // Students can only create check-ins for themselves,
+      // for their current active plan.
+      allow create: if isStudent() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.planId is string &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.planId
+          == request.resource.data.planId &&
+        get(/databases/$(database)/documents/plans/$(request.resource.data.planId)).data.active
+          == true;
+
+      // Check-ins are append-only to manter histórico confiável.
+      allow update, delete: if false;
+    }
+
+    // Future collections (classes, enrollments, payments) can be refined later.
+    match /classes/{classId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isCoach();
+    }
+
+    match /enrollments/{id} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isCoach();
+    }
+
+    match /payments/{id} {
+      allow read, create: if isCoach() || isAdmin();
+      allow update, delete: if isAdmin();
+    }
+  }
+}
+
