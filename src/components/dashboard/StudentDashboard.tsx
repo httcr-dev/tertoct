@@ -182,10 +182,22 @@ export function StudentDashboard() {
   const isPaymentOverdue = useMemo(() => {
     if (!profile) return false;
     const dueDay = (profile as any).paymentDueDay;
-    const isPaid = (profile as any).monthlyPaymentPaid;
     if (dueDay == null) return false; // No due day set, no restriction
+    
+    // Check if there's a valid expiration date set by coach
+    const validUntil = (profile as any).paymentValidUntil as Timestamp | undefined;
+    const now = new Date();
+
+    if (validUntil) {
+      // If we have a validUntil date, we strictly rely on it.
+      return now.getTime() > validUntil.toDate().getTime();
+    }
+
+    // Fallback for older records
+    const isPaid = (profile as any).monthlyPaymentPaid;
     if (isPaid) return false; // Already paid
-    const currentDay = new Date().getDate();
+    
+    const currentDay = now.getDate();
     return currentDay > dueDay;
   }, [profile]);
 

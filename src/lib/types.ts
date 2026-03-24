@@ -19,6 +19,7 @@ export interface UserDocument {
   createdAt: Timestamp;
   paymentDueDay?: number | null;
   monthlyPaymentPaid?: boolean;
+  paymentValidUntil?: any;
 }
 
 export interface CheckIn {
@@ -38,4 +39,5 @@ export interface StudentSummary {
   active?: boolean;
   paymentDueDay?: number | null;
   monthlyPaymentPaid?: boolean;
+  paymentValidUntil?: any;
 }

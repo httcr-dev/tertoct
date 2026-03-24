@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TertoCT Gym Check-In",
+  title: "TertoCT Gym",
   description: "Check-in system for TertoCT Gym",
 };
 

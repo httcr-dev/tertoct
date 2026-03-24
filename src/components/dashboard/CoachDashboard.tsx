@@ -37,6 +37,7 @@ export function CoachDashboard() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [students, setStudents] = useState<StudentSummary[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<string>("all");
+  const [paymentFilter, setPaymentFilter] = useState<string>("all");
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
   const [editingFields, setEditingFields] = useState<Partial<Plan>>({});
   const editPlanRef = useRef<HTMLDivElement>(null);
@@ -56,14 +57,7 @@ export function CoachDashboard() {
   );
 
   // Helpers
-  function startOfWeek(date: Date): Date {
-    const d = new Date(date);
-    const day = d.getDay();
-    const diff = (day === 0 ? -6 : 1) - day; // Monday as first day
-    d.setDate(d.getDate() + diff);
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }
+
 
   const updateWeeklyCheckIns = (
     studentsList: StudentSummary[],
@@ -120,6 +114,7 @@ export function CoachDashboard() {
             weeklyCheckIns: 0,
             paymentDueDay: data.paymentDueDay ?? null,
             monthlyPaymentPaid: data.monthlyPaymentPaid ?? false,
+            paymentValidUntil: data.paymentValidUntil ?? null,
             ...(data.active !== undefined ? { active: !!data.active } : {}),
           });
         });
@@ -146,19 +141,21 @@ export function CoachDashboard() {
       },
     );
 
-    // Real-time listener for weekly check-ins
+    // Real-time listener for monthly check-ins (last 30 days)
     const checkInsRef = collection(db, "checkins");
-    const weekStart = startOfWeek(new Date());
-    const unsubWeekly = onSnapshot(
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const unsubMonthly = onSnapshot(
       query(
         checkInsRef,
-        where("createdAt", ">=", Timestamp.fromDate(weekStart)),
+        where("createdAt", ">=", Timestamp.fromDate(thirtyDaysAgo)),
       ),
       (snap) => {
         const counts = new Map<string, number>();
         snap.forEach((d) => {
           const uid = d.data().userId;
-          counts.set(uid, (counts.get(uid) ?? 0) + 1);
+          if (uid) {
+            counts.set(uid, (counts.get(uid) ?? 0) + 1);
+          }
         });
         setCheckinCounts(counts);
       },
@@ -168,7 +165,7 @@ export function CoachDashboard() {
       unsubPlans();
       unsubStudents();
       unsubProfessors();
-      unsubWeekly();
+      unsubMonthly();
     };
   }, [db]);
 
@@ -334,13 +331,18 @@ export function CoachDashboard() {
       const q = query(
         checkInsRef,
         where("userId", "==", student.id),
-        orderBy("createdAt", "desc"),
       );
       const snap = await getDocs(q);
       const history: Array<any> = [];
       snap.forEach((d) => {
         const data = d.data();
         history.push({ id: d.id, ...data });
+      });
+      // Sort locally to avoid needing a composite index
+      history.sort((a, b) => {
+        const dateA = a.createdAt?.toDate?.()?.getTime() || a.createdAt?.seconds * 1000 || 0;
+        const dateB = b.createdAt?.toDate?.()?.getTime() || b.createdAt?.seconds * 1000 || 0;
+        return dateB - dateA;
       });
       setCheckinHistory(history);
     } catch (err) {
@@ -350,40 +352,57 @@ export function CoachDashboard() {
   };
 
   const closeCheckinsModal = () => {
-    setCheckinModalOpen(false);
+        setCheckinModalOpen(false);
     setSelectedStudentForHistory(null);
     setCheckinHistory([]);
   };
 
+  // Consolidated into onSnapshot above
   useEffect(() => {
-    const loadWeeklyCheckIns = async () => {
-      const weekStart = startOfWeek(new Date());
-      const checkInsRef = collection(db, "checkins");
-      const q = query(
-        checkInsRef,
-        where("createdAt", ">=", Timestamp.fromDate(weekStart)),
-      );
-      const snap = await getDocs(q);
-
-      const counts = new Map<string, number>();
-      snap.forEach((docSnap) => {
-        const data = docSnap.data();
-        const userId = data.userId as string;
-        counts.set(userId, (counts.get(userId) ?? 0) + 1);
-      });
-
-      setStudents((prev) => updateWeeklyCheckIns(prev, counts));
-    };
-
-    loadWeeklyCheckIns().catch((error) => {
-      console.error("Failed to load weekly check-ins", error);
-    });
+    // This effect is now redundant as onSnapshot handles real-time updates
   }, [db]);
 
   const filteredStudents = useMemo(() => {
-    if (selectedPlanId === "all") return studentsWithCounts;
-    return studentsWithCounts.filter((s) => s.planId === selectedPlanId);
-  }, [studentsWithCounts, selectedPlanId]);
+    let list = studentsWithCounts;
+    
+    // Plan Filter
+    if (selectedPlanId !== "all") {
+      list = list.filter((s) => s.planId === selectedPlanId);
+    }
+
+    // Payment Filter
+    if (paymentFilter !== "all") {
+      const now = new Date();
+      list = list.filter((s) => {
+        const hasDueDay = s.paymentDueDay != null;
+        if (paymentFilter === "none") return !hasDueDay;
+        if (!hasDueDay) return false;
+
+        let isPaid = false;
+        if (s.paymentValidUntil) {
+          isPaid = now.getTime() <= s.paymentValidUntil.toDate().getTime();
+        } else {
+          isPaid = !!s.monthlyPaymentPaid || now.getDate() <= s.paymentDueDay!;
+        }
+
+        if (paymentFilter === "pending") return !isPaid;
+        
+        // Ativos vs Pagos logic
+        // Ativo: Paid but validUntil is in the current month (needs renewal)
+        // Pago: Paid and validUntil is in the next month (already renewed)
+        if (isPaid) {
+          if (!s.paymentValidUntil) return paymentFilter === "active"; // Fallback: if just "paid" checkbox, assume active
+          const validUntil = s.paymentValidUntil.toDate();
+          const isNextMonth = validUntil.getMonth() !== now.getMonth() || validUntil.getFullYear() !== now.getFullYear();
+          if (paymentFilter === "paid") return isNextMonth;
+          if (paymentFilter === "active") return !isNextMonth;
+        }
+        return false;
+      });
+    }
+
+    return list;
+  }, [studentsWithCounts, selectedPlanId, paymentFilter]);
 
   const handleTogglePlanActive = async (plan: Plan) => {
     const ref = doc(db, "plans", plan.id);
@@ -411,9 +430,41 @@ export function CoachDashboard() {
 
   const handleTogglePayment = async (student: StudentSummary) => {
     const ref = doc(db, "users", student.id);
-    await updateDoc(ref, {
-      monthlyPaymentPaid: !student.monthlyPaymentPaid,
-    });
+    const now = new Date();
+    
+    let isPaid = false;
+    if (student.paymentValidUntil) {
+      isPaid = now.getTime() <= student.paymentValidUntil.toDate().getTime();
+    } else {
+      isPaid = student.monthlyPaymentPaid || false;
+    }
+
+    if (isPaid) {
+      // If currently paid, unmark
+      await updateDoc(ref, {
+        monthlyPaymentPaid: false,
+        paymentValidUntil: deleteField(),
+      });
+    } else {
+      // If pending, mark as paid until the next due day
+      let targetMonth = now.getMonth() + 1;
+      let targetYear = now.getFullYear();
+      if (targetMonth > 11) {
+        targetMonth = 0; // January
+        targetYear += 1;
+      }
+      
+      const dueDay = student.paymentDueDay || 10;
+      const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
+      const day = Math.min(dueDay, lastDay);
+      // Valid until end of the due day in the target month (23:59:59)
+      const validUntil = new Date(targetYear, targetMonth, day, 23, 59, 59, 999);
+
+      await updateDoc(ref, {
+        monthlyPaymentPaid: true,
+        paymentValidUntil: Timestamp.fromDate(validUntil),
+      });
+    }
   };
 
   const handleNavigateToCoaches = () => {
@@ -592,6 +643,8 @@ export function CoachDashboard() {
               filteredStudents={filteredStudents}
               selectedPlanId={selectedPlanId}
               setSelectedPlanId={setSelectedPlanId}
+              paymentFilter={paymentFilter}
+              setPaymentFilter={setPaymentFilter}
               plans={plans}
               viewCheckins={viewCheckins}
               handleAssignPlan={handleAssignPlan}
