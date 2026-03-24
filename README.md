@@ -58,4 +58,3 @@ Permissions are enforced by Firestore rules in `firestore.rules`. Deploy them wi
 ```bash
 firebase deploy --only firestore:rules
 ```
-

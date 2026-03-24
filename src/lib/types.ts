@@ -25,6 +25,17 @@ export interface CheckIn {
   id: string;
   userId: string;
   planId: string;
-  createdAt: Date;
+  createdAt: any; // Can be Timestamp or Date depending on source
 }
 
+export interface StudentSummary {
+  id: string;
+  name: string | null;
+  email: string | null;
+  photoURL?: string | null;
+  planId?: string | null;
+  weeklyCheckIns: number;
+  active?: boolean;
+  paymentDueDay?: number | null;
+  monthlyPaymentPaid?: boolean;
+}

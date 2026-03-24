@@ -20,6 +20,7 @@ import { getFirestoreDb } from "@/lib/firebase";
 import type { Plan, CheckIn } from "@/lib/types";
 import { useAuth } from "../auth/AuthProvider";
 import { Home, List, Users, CheckCircle, LogOut } from "lucide-react";
+import { BarChart } from "@/components/ui/BarChart";
 
 function startOfWeek(date: Date): Date {
   const d = new Date(date);
@@ -30,138 +31,7 @@ function startOfWeek(date: Date): Date {
   return d;
 }
 
-function BarChart({ dataItems, ds = 14 }: { dataItems: any[]; ds?: number }) {
-  // compute counts per day for last `days`
-  const counts: number[] = Array.from({ length: ds }, () => 0);
-  const now = new Date();
-  
-  // Day labels
-  const days: string[] = [];
-  for (let i = 0; i < ds; i++) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - (ds - 1 - i));
-    days.push(d.toLocaleDateString("pt-BR", { day: "numeric", month: "short" }));
-  }
 
-  for (const item of dataItems) {
-    const d = item.createdAt;
-    if (!d) continue;
-    const diff = Math.floor(
-      (now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24),
-    );
-    if (diff >= 0 && diff < ds) {
-      counts[ds - 1 - diff]++;
-    }
-  }
-
-  const max = Math.max(...counts, 3);
-  const width = 800;
-  const height = 200;
-  const padding = { top: 20, right: 30, bottom: 40, left: 40 };
-  const chartWidth = width - padding.left - padding.right;
-  const chartHeight = height - padding.top - padding.bottom;
-  const barSpacing = 8;
-  const rawBarWidth = chartWidth / ds;
-  const barWidth = rawBarWidth - barSpacing;
-
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-
-  return (
-    <div className="relative group/chart">
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        width="100%"
-        height={height}
-        className="mt-4 overflow-visible"
-      >
-        {/* Y-axis Grid Lines */}
-        {[0, 0.5, 1].map((p, i) => (
-          <g key={i} className="opacity-20 text-zinc-600">
-            <line
-              x1={padding.left}
-              y1={padding.top + chartHeight * (1 - p)}
-              x2={width - padding.right}
-              y2={padding.top + chartHeight * (1 - p)}
-              stroke="currentColor"
-              strokeWidth="1"
-              strokeDasharray="4 4"
-            />
-            <text
-              x={padding.left - 10}
-              y={padding.top + chartHeight * (1 - p) + 4}
-              textAnchor="end"
-              fontSize="10"
-              fill="currentColor"
-              className="font-medium"
-            >
-              {Math.round(max * p)}
-            </text>
-          </g>
-        ))}
-
-        {/* X-axis Labels */}
-        {days.map((day, i) => (
-          (i % (ds > 7 ? 2 : 1) === 0 || i === ds - 1) && (
-            <text
-              key={i}
-              x={padding.left + i * rawBarWidth + barWidth / 2}
-              y={height - 15}
-              textAnchor="middle"
-              fontSize="10"
-              fill="#71717a"
-              className="font-medium"
-            >
-              {i === ds - 1 ? "Hoje" : day}
-            </text>
-          )
-        ))}
-
-        {/* Bars */}
-        {counts.map((c, i) => {
-          const h = (c / max) * chartHeight;
-          const x = padding.left + i * rawBarWidth;
-          const y = padding.top + chartHeight - h;
-          const isHovered = hoveredIndex === i;
-
-          return (
-            <g 
-              key={i} 
-              onMouseEnter={() => setHoveredIndex(i)}
-              onMouseLeave={() => setHoveredIndex(null)}
-              className="cursor-default"
-            >
-              <rect
-                x={x}
-                y={padding.top}
-                width={barWidth}
-                height={chartHeight}
-                fill="transparent"
-              />
-              <rect
-                x={x}
-                y={y}
-                width={barWidth}
-                height={h}
-                rx={6}
-                fill={isHovered ? "#f59e0b" : "#c29b62"}
-                className="transition-all duration-300"
-                style={{
-                  filter: isHovered ? "drop-shadow(0 0 8px rgba(245, 158, 11, 0.4))" : "none"
-                }}
-              />
-              {isHovered && (
-                <g transform={`translate(${x + barWidth / 2}, ${y - 12})`}>
-                  <rect x="-25" y="-24" width="50" height="20" rx="6" fill="#18181b" stroke="#3f3f46" strokeWidth="1" />
-                  <text textAnchor="middle" fontSize="10" fontWeight="bold" fill="#f4f4f5" y="-10">{c} {c === 1 ? 'aula' : 'aulas'}</text>
-                </g>
-              )}
-            </g>
-          );
-        })}
-      </svg>
-    </div>
-  );
-}
 
 export function StudentDashboard() {
   const { profile, signOutUser } = useAuth();
@@ -206,34 +76,35 @@ export function StudentDashboard() {
       }
 
       const checkInsRef = collection(db, "checkins");
-      const qCheckins = query(
-        checkInsRef,
-        where("userId", "==", profile.id)
-      );
+      const qCheckins = query(checkInsRef, where("userId", "==", profile.id));
 
-      unsubCheckins = onSnapshot(qCheckins, (snap) => {
-        const next: CheckIn[] = [];
-        snap.forEach((docSnap) => {
-          const data = docSnap.data() as DocumentData;
-          const createdAt = data.createdAt as Timestamp | undefined;
-          next.push({
-            id: docSnap.id,
-            userId: data.userId,
-            planId: data.planId,
-            createdAt: createdAt?.toDate() ?? new Date(),
+      unsubCheckins = onSnapshot(
+        qCheckins,
+        (snap) => {
+          const next: CheckIn[] = [];
+          snap.forEach((docSnap) => {
+            const data = docSnap.data() as DocumentData;
+            const createdAt = data.createdAt as Timestamp | undefined;
+            next.push({
+              id: docSnap.id,
+              userId: data.userId,
+              planId: data.planId,
+              createdAt: createdAt?.toDate() ?? new Date(),
+            });
           });
-        });
-        next.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-        setCheckIns(next);
-      }, (error) => {
-        console.error("Error fetching checkins:", error);
-      });
+          next.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+          setCheckIns(next);
+        },
+        (error) => {
+          console.error("Error fetching checkins:", error);
+        },
+      );
 
       // Fetch all active plans
       tasks.push(
         (async () => {
           const plansRef = collection(db, "plans");
-          const q = query(plansRef); 
+          const q = query(plansRef);
           const snap = await getDocs(q);
           const next: Plan[] = [];
           snap.forEach((docSnap) => {
@@ -249,7 +120,9 @@ export function StudentDashboard() {
               });
             }
           });
-          setPlans(next.sort((a, b) => (a.name || "").localeCompare(b.name || "")));
+          setPlans(
+            next.sort((a, b) => (a.name || "").localeCompare(b.name || "")),
+          );
         })(),
       );
 
@@ -273,7 +146,6 @@ export function StudentDashboard() {
 
       try {
         await Promise.all(tasks);
-
       } catch (err) {
         // failed to load constants
       } finally {
@@ -354,8 +226,6 @@ export function StudentDashboard() {
     }
   };
 
-
-
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-black text-zinc-100">
@@ -433,10 +303,26 @@ export function StudentDashboard() {
       {/* Mobile bottom nav */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 flex md:hidden items-center justify-around border-t border-zinc-800/60 bg-black/90 backdrop-blur-xl px-2 py-2">
         {[
-          { tab: "overview" as const, icon: <Home className="h-5 w-5" />, label: "Início" },
-          { tab: "checkin" as const, icon: <CheckCircle className="h-5 w-5" />, label: "Check-in" },
-          { tab: "plans" as const, icon: <List className="h-5 w-5" />, label: "Planos" },
-          { tab: "professors" as const, icon: <Users className="h-5 w-5" />, label: "Profs" },
+          {
+            tab: "overview" as const,
+            icon: <Home className="h-5 w-5" />,
+            label: "Início",
+          },
+          {
+            tab: "checkin" as const,
+            icon: <CheckCircle className="h-5 w-5" />,
+            label: "Check-in",
+          },
+          {
+            tab: "plans" as const,
+            icon: <List className="h-5 w-5" />,
+            label: "Planos",
+          },
+          {
+            tab: "professors" as const,
+            icon: <Users className="h-5 w-5" />,
+            label: "Profs",
+          },
         ].map(({ tab, icon, label }) => (
           <button
             key={tab}
@@ -462,10 +348,10 @@ export function StudentDashboard() {
               </p>
               <h1 className="text-xl font-bold text-zinc-50 flex items-center gap-3">
                 {profile?.photoURL && (
-                  <img 
-                    src={profile.photoURL} 
-                    alt={profile.name || ""} 
-                    className="h-8 w-8 rounded-full object-cover border border-zinc-700/50 shadow-sm shadow-amber-500/20 block" 
+                  <img
+                    src={profile.photoURL}
+                    alt={profile.name || ""}
+                    className="h-8 w-8 rounded-full object-cover border border-zinc-700/50 shadow-sm shadow-amber-500/20 block"
                     referrerPolicy="no-referrer"
                   />
                 )}
@@ -473,7 +359,6 @@ export function StudentDashboard() {
               </h1>
             </div>
             <div className="flex items-center gap-4">
-
               <button
                 onClick={signOutUser}
                 className="flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
@@ -493,8 +378,13 @@ export function StudentDashboard() {
                     <span className="text-lg font-bold">!</span>
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-red-400">Mensalidade Pendente</p>
-                    <p className="text-xs text-red-400/70 mt-0.5">Seu check-in está bloqueado. Procure seu professor para regularizar o pagamento.</p>
+                    <p className="text-sm font-semibold text-red-400">
+                      Mensalidade Pendente
+                    </p>
+                    <p className="text-xs text-red-400/70 mt-0.5">
+                      Seu check-in está bloqueado. Procure seu professor para
+                      regularizar o pagamento.
+                    </p>
                   </div>
                 </div>
               )}
@@ -546,7 +436,9 @@ export function StudentDashboard() {
                         <p className="text-3xl font-bold text-zinc-100">
                           {currentWeekInfo.count}/{currentWeekInfo.allowed}
                         </p>
-                        <p className="text-zinc-400 text-sm">Aulas realizadas</p>
+                        <p className="text-zinc-400 text-sm">
+                          Aulas realizadas
+                        </p>
                       </div>
                       <div className="text-right">
                         <p className="text-xl font-semibold text-emerald-400">
@@ -688,11 +580,16 @@ export function StudentDashboard() {
 
                       {!canCheckIn && (
                         <p className="text-red-400/80 text-xs font-medium bg-red-500/5 py-2 rounded-full border border-red-500/10">
-                          {isPaymentOverdue ? "Mensalidade pendente. Procure seu professor para regularizar." :
-                           !plan ? "Seu perfil não possui um plano associado." : 
-                           !plan.active ? "Este plano está desativado pela administração." :
-                           currentWeekInfo && currentWeekInfo.remaining <= 0 ? "Você atingiu o limite de check-ins para esta semana." :
-                           "Não é possível fazer check-in no momento."}
+                          {isPaymentOverdue
+                            ? "Mensalidade pendente. Procure seu professor para regularizar."
+                            : !plan
+                              ? "Seu perfil não possui um plano associado."
+                              : !plan.active
+                                ? "Este plano está desativado pela administração."
+                                : currentWeekInfo &&
+                                    currentWeekInfo.remaining <= 0
+                                  ? "Você atingiu o limite de check-ins para esta semana."
+                                  : "Não é possível fazer check-in no momento."}
                         </p>
                       )}
                     </div>
@@ -753,9 +650,9 @@ export function StudentDashboard() {
                 >
                   <div className="h-20 w-20 rounded-[28px] bg-zinc-800 border border-zinc-700/50 flex items-center justify-center text-zinc-500 mb-4 group-hover:scale-110 transition-transform duration-300 overflow-hidden shadow-lg shadow-amber-500/5">
                     {prof.photoURL ? (
-                      <img 
-                        src={prof.photoURL} 
-                        alt={prof.name || ""} 
+                      <img
+                        src={prof.photoURL}
+                        alt={prof.name || ""}
                         className="w-full h-full object-cover block"
                         referrerPolicy="no-referrer"
                       />
@@ -783,4 +680,3 @@ export function StudentDashboard() {
     </div>
   );
 }
-
