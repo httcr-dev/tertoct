@@ -11,6 +11,8 @@ import {
 import {
   onAuthStateChanged,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   User as FirebaseUser,
 } from "firebase/auth";
@@ -36,39 +38,125 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<AppUserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // First: Handle redirect result and initialize auth listener
   useEffect(() => {
     const auth = getFirebaseAuth();
+    let unsubscribe: (() => void) | null = null;
 
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setFirebaseUser(user);
-
-      if (user) {
-        try {
-          const ensured = await ensureUserDocument(user);
-          setProfile(ensured);
-        } catch (error) {
-          console.error("Failed to ensure user document", error);
-          setProfile(null);
+    const initAuth = async () => {
+      try {
+        // First, try to get the redirect result from Google sign-in
+        console.log("🔍 Checking for redirect result...");
+        const result = await getRedirectResult(auth);
+        if (result?.user) {
+          console.log("✅ Redirect sign-in successful:", {
+            email: result.user.email,
+            uid: result.user.uid,
+            isAnonymous: result.user.isAnonymous,
+          });
+        } else {
+          console.log(
+            "❓ No redirect result (normal if not returning from Google login)",
+          );
         }
-      } else {
-        setProfile(null);
+      } catch (error: any) {
+        console.error("❌ Error handling redirect result:", {
+          message: error?.message,
+          code: error?.code,
+        });
       }
 
-      setLoading(false);
-    });
+      // Now set up the auth state listener
+      console.log("🔐 Setting up auth state listener...");
+      unsubscribe = onAuthStateChanged(auth, async (user) => {
+        console.log("👤 Auth state changed:", {
+          email: user?.email || "logged out",
+          uid: user?.uid,
+        });
 
-    return () => unsubscribe();
+        setFirebaseUser(user);
+
+        if (user) {
+          try {
+            console.log("📝 Ensuring user document in Firestore...");
+            const ensured = await ensureUserDocument(user);
+            setProfile(ensured);
+            console.log("✅ User profile ready:", ensured.email);
+          } catch (error) {
+            console.error("❌ Failed to ensure user document:", error);
+            setProfile(null);
+          }
+        } else {
+          console.log("⚠️ No user, clearing profile");
+          setProfile(null);
+        }
+
+        console.log("✅ Loading set to false");
+        setLoading(false);
+      });
+    };
+
+    initAuth();
+
+    return () => {
+      if (unsubscribe) {
+        console.log("🧹 Cleaning up auth listener");
+        unsubscribe();
+      }
+    };
   }, []);
 
   const signInWithGoogle = async () => {
     const auth = getFirebaseAuth();
+
+    // Detect if mobile device
+    const isMobile =
+      /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(
+        navigator.userAgent.toLowerCase(),
+      );
+
+    console.log("🔐 Starting Google sign-in...", {
+      isMobile,
+      userAgent: navigator.userAgent,
+    });
+
     try {
+      // Always try popup first - works better on modern mobile browsers
+      console.log("📱 Attempting popup method...");
       await signInWithPopup(auth, googleProvider);
+      console.log("✅ Popup sign-in successful");
     } catch (error: any) {
-      if (error.code === "auth/cancelled-popup-request" || error.code === "auth/popup-closed-by-user") {
+      console.error("⚠️ Popup error:", {
+        code: error?.code,
+        message: error?.message,
+      });
+
+      // Only use redirect if popup is not supported (e.g., in WebViews)
+      if (
+        error?.code === "auth/operation-not-supported-in-this-environment" ||
+        error?.code === "auth/popup-blocked"
+      ) {
+        console.log("🔄 Popup not supported, trying redirect...");
+        try {
+          await signInWithRedirect(auth, googleProvider);
+          // Execution stops here on redirect
+        } catch (redirectError: any) {
+          console.error("❌ Redirect also failed:", {
+            code: redirectError?.code,
+            message: redirectError?.message,
+          });
+          throw redirectError;
+        }
+      } else if (
+        error?.code === "auth/cancelled-popup-request" ||
+        error?.code === "auth/popup-closed-by-user"
+      ) {
+        console.log("❌ Sign-in was cancelled by user");
         return;
+      } else {
+        console.error("❌ Unexpected sign-in error:", error);
+        throw error;
       }
-      throw error;
     }
   };
 

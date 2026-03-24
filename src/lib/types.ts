@@ -17,6 +17,8 @@ export interface UserDocument {
   planId?: string | null;
   active: boolean;
   createdAt: Timestamp;
+  paymentDueDay?: number | null;
+  monthlyPaymentPaid?: boolean;
 }
 
 export interface CheckIn {

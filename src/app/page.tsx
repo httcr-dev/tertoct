@@ -29,7 +29,14 @@ export default function Home() {
   const [loadingLandingData, setLoadingLandingData] = useState(true);
 
   useEffect(() => {
+    console.log("🏠 Page.tsx - Auth state:", {
+      loading,
+      hasProfile: !!profile,
+      profileEmail: profile?.email,
+    });
+
     if (!loading && profile) {
+      console.log("🚀 Redirecting to dashboard...", profile.email);
       router.replace("/dashboard");
     }
   }, [loading, profile, router]);
@@ -66,12 +73,14 @@ export default function Home() {
         const loadedCoaches: CoachCardData[] = [];
         coachesSnap.forEach((docSnap) => {
           const data = docSnap.data() as DocumentData;
-          loadedCoaches.push({
-            id: docSnap.id,
-            name: (data.name as string | null | undefined) ?? null,
-            bio: (data.bio as string | null | undefined) ?? undefined,
-            photoURL: (data.photoURL as string | null | undefined) ?? undefined,
-          });
+          if (data.active !== false) {
+            loadedCoaches.push({
+              id: docSnap.id,
+              name: (data.name as string | null | undefined) ?? null,
+              bio: (data.bio as string | null | undefined) ?? undefined,
+              photoURL: (data.photoURL as string | null | undefined) ?? undefined,
+            });
+          }
         });
 
         setPlans(loadedPlans);
@@ -89,308 +98,337 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen bg-black text-zinc-50 overflow-hidden font-sans">
-      {/* BACKGROUND IMAGE & OVERLAYS */}
-      <div className="fixed inset-0 z-0">
-        <Image
-          src="/hero-tiago.png"
-          alt="TertoCT Boxe Background"
-          fill
-          priority
-          className="object-cover object-top opacity-50 mix-blend-lighten"
-        />
-        {/* Gradients para escurecer as bordas e a base */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/20 to-black/95" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.8)_100%)] pointer-events-none" />
-      </div>
+      {/* LOADING SCREEN - Show while auth is initializing or redirecting */}
+      {(loading || profile) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">
+          <div className="flex flex-col items-center gap-4">
+            <div className="h-12 w-12 animate-spin rounded-full border-4 border-[#c29b62] border-t-transparent" />
+            <p className="text-sm text-zinc-400">
+              {profile ? "Redirecionando..." : "Carregando..."}
+            </p>
+          </div>
+        </div>
+      )}
 
-      <main className="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col px-4 pb-8 pt-8 lg:px-8">
-        {/* HEADER */}
-        <header className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img src="/logo-academy.png" alt="TertoCT Logo" className="h-10 w-10 object-contain" />
-            <span className="font-bold text-zinc-100 tracking-wide text-2xl">
-              TertoCT
-            </span>
+      {/* Hide content while loading or redirecting */}
+      {(!loading && !profile) && (
+        <>
+          {/* BACKGROUND IMAGE & OVERLAYS */}
+          <div className="fixed inset-0 z-0">
+            <Image
+              src="/hero-tiago.png"
+              alt="TertoCT Boxe Background"
+              fill
+              priority
+              className="object-cover object-top opacity-50 mix-blend-lighten"
+            />
+            {/* Gradients para escurecer as bordas e a base */}
+            <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/20 to-black/95" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.8)_100%)] pointer-events-none" />
           </div>
 
-          <nav className="hidden items-center gap-8 text-sm font-medium text-zinc-300 md:flex">
-            <a href="#plans" className="transition hover:text-[#c29b62]">
-              Planos
-            </a>
-            <a href="#coaches" className="transition hover:text-[#c29b62]">
-              Professores
-            </a>
-            <a href="#contact" className="transition hover:text-[#c29b62]">
-              Contato
-            </a>
-            <button
-              onClick={signInWithGoogle}
-              className="ml-4 cursor-pointer rounded-md bg-[#c29b62] px-6 py-2.5 text-sm font-semibold text-black transition hover:bg-[#d4b075] shadow-[0_0_15px_rgba(194,155,98,0.4)]"
-            >
-              Entrar com conta Google
-            </button>
-          </nav>
-
-          <button
-            onClick={signInWithGoogle}
-            className="md:hidden flex cursor-pointer items-center gap-2 rounded-md bg-[#c29b62] px-4 py-2 text-sm font-medium text-black transition hover:bg-[#d4b075]"
-          >
-            <span>Entrar</span>
-          </button>
-        </header>
-
-        {/* HERO SECTION */}
-        <section className="mt-20 flex flex-1 flex-col items-center justify-center text-center space-y-6 lg:mt-28">
-          <h1 className="max-w-4xl text-5xl font-black uppercase leading-[1.1] tracking-wide text-zinc-100 sm:text-6xl lg:text-[5rem] drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)]">
-            Treine de boxe focado
-            <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#e6c687] via-[#c29b62] to-[#9c753b]">
-              em saúde, desempenho!
-            </span>
-            <br />e disciplina
-          </h1>
-          <p className="max-w-2xl text-base text-zinc-300 sm:text-lg drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] mt-6">
-            Entre em forma de maneira intensa e focada.
-            <br className="hidden sm:block" /> Agende uma aula experimental!
-          </p>
-
-          <button
-            onClick={signInWithGoogle}
-            className="mt-8 flex cursor-pointer items-center gap-3 rounded-md bg-zinc-100 px-8 py-3.5 text-base font-semibold text-zinc-900 shadow-[0_0_25px_rgba(255,255,255,0.15)] transition hover:bg-white hover:scale-[1.02]"
-          >
-            <Image src="/google-logo.svg" alt="Google" width={20} height={20} />
-            <span>Login com Google</span>
-          </button>
-        </section>
-
-        {/* NOSSOS PLANOS */}
-        <section id="plans" className="mt-32 flex flex-col items-center w-full">
-          <p className="text-sm font-bold uppercase tracking-[0.25em] text-[#c29b62] mb-3">
-            Escolha seu plano
-          </p>
-          <h2 className="text-3xl sm:text-4xl font-black text-zinc-100 mb-4 drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">
-            Nossos Planos
-          </h2>
-          <p className="text-zinc-400 text-sm mb-14 max-w-md text-center">
-            Planos flexíveis para todos os níveis. Treino de boxe com foco em saúde e
-            desempenho.
-          </p>
-
-          <div className="flex flex-wrap justify-center gap-8 w-full">
-            {loadingLandingData ? (
-              <div className="flex items-center justify-center py-16 w-full">
-                <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#c29b62] border-t-transparent" />
+          <main className="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col px-4 pb-8 pt-8 lg:px-8">
+            {/* HEADER */}
+            <header className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <img
+                  src="/logo-academy.png"
+                  alt="TertoCT Logo"
+                  className="h-10 w-10 object-contain"
+                />
+                <span className="font-bold text-zinc-100 tracking-wide text-2xl">
+                  TertoCT
+                </span>
               </div>
-            ) : plans.length > 0 ? (
-              plans.map((plan, index) => (
-                <div
-                  key={plan.id}
-                  className="group relative flex w-full max-w-sm flex-col rounded-2xl border border-[#c29b62]/20 bg-gradient-to-br from-zinc-900/90 via-zinc-900/70 to-black/90 p-8 backdrop-blur-xl transition-all duration-500 hover:border-[#c29b62]/60 hover:shadow-[0_0_40px_rgba(194,155,98,0.15)] hover:-translate-y-1"
-                  style={{ animationDelay: `${index * 100}ms` }}
+
+              <nav className="hidden items-center gap-8 text-sm font-medium text-zinc-300 md:flex">
+                <a href="#plans" className="transition hover:text-[#c29b62]">
+                  Planos
+                </a>
+                <a href="#coaches" className="transition hover:text-[#c29b62]">
+                  Professores
+                </a>
+                <a href="#contact" className="transition hover:text-[#c29b62]">
+                  Contato
+                </a>
+                <button
+                  onClick={signInWithGoogle}
+                  className="ml-4 cursor-pointer rounded-md bg-[#c29b62] px-6 py-2.5 text-sm font-semibold text-black transition hover:bg-[#d4b075] shadow-[0_0_15px_rgba(194,155,98,0.4)]"
                 >
-                  {/* Glow effect */}
-                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#c29b62]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                  Entrar com conta Google
+                </button>
+              </nav>
 
-                  {/* Header */}
-                  <div className="relative">
-                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#c29b62]/80 mb-1">
-                      {plan.classesPerWeek}x na semana
-                    </p>
-                    <h3 className="text-2xl font-black text-zinc-100 tracking-tight">
-                      {plan.name}
-                    </h3>
+              <button
+                onClick={signInWithGoogle}
+                className="md:hidden flex cursor-pointer items-center gap-2 rounded-md bg-[#c29b62] px-4 py-2 text-sm font-medium text-black transition hover:bg-[#d4b075]"
+              >
+                <span>Entrar</span>
+              </button>
+            </header>
+
+            {/* HERO SECTION */}
+            <section className="mt-20 flex flex-1 flex-col items-center justify-center text-center space-y-6 lg:mt-28">
+              <h1 className="max-w-4xl text-5xl font-black uppercase leading-[1.1] tracking-wide text-zinc-100 sm:text-6xl lg:text-[5rem] drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)]">
+                Treino de boxe focado
+                <br />
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#e6c687] via-[#c29b62] to-[#9c753b]">
+                  em saúde, desempenho!
+                </span>
+                <br />e disciplina
+              </h1>
+              <p className="max-w-2xl text-base text-zinc-300 sm:text-lg drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] mt-6">
+                Entre em forma de maneira intensa e focada.
+                <br className="hidden sm:block" /> Agende uma aula experimental!
+              </p>
+
+              <button
+                onClick={signInWithGoogle}
+                className="mt-8 flex cursor-pointer items-center gap-3 rounded-md bg-zinc-100 px-8 py-3.5 text-base font-semibold text-zinc-900 shadow-[0_0_25px_rgba(255,255,255,0.15)] transition hover:bg-white hover:scale-[1.02]"
+              >
+                <Image
+                  src="/google-logo.svg"
+                  alt="Google"
+                  width={20}
+                  height={20}
+                />
+                <span>Login com Google</span>
+              </button>
+            </section>
+
+            {/* NOSSOS PLANOS */}
+            <section
+              id="plans"
+              className="mt-32 flex flex-col items-center w-full"
+            >
+              <p className="text-sm font-bold uppercase tracking-[0.25em] text-[#c29b62] mb-3">
+                Escolha seu plano
+              </p>
+              <h2 className="text-3xl sm:text-4xl font-black text-zinc-100 mb-4 drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">
+                Nossos Planos
+              </h2>
+              <p className="text-zinc-400 text-sm mb-14 max-w-md text-center">
+                Planos flexíveis para todos os níveis. Treino de boxe com foco
+                em saúde e desempenho.
+              </p>
+
+              <div className="flex flex-wrap justify-center gap-8 w-full">
+                {loadingLandingData ? (
+                  <div className="flex items-center justify-center py-16 w-full">
+                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#c29b62] border-t-transparent" />
                   </div>
+                ) : plans.length > 0 ? (
+                  plans.map((plan, index) => (
+                    <div
+                      key={plan.id}
+                      className="group relative flex w-full max-w-sm flex-col rounded-2xl border border-[#c29b62]/20 bg-gradient-to-br from-zinc-900/90 via-zinc-900/70 to-black/90 p-8 backdrop-blur-xl transition-all duration-500 hover:border-[#c29b62]/60 hover:shadow-[0_0_40px_rgba(194,155,98,0.15)] hover:-translate-y-1"
+                      style={{ animationDelay: `${index * 100}ms` }}
+                    >
+                      {/* Glow effect */}
+                      <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#c29b62]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
 
-                  {/* Price */}
-                  <div className="relative mt-6 mb-6 pb-6 border-b border-zinc-800/80">
-                    <p className="flex items-baseline gap-1">
-                      <span className="text-sm font-semibold text-[#c29b62] self-start mt-2">
-                        R$
-                      </span>
-                      <span className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#e6c687] via-[#c29b62] to-[#9c753b]">
-                        {Math.floor(plan.price)}
-                      </span>
-                      <span className="text-base font-medium text-zinc-500">
-                        /mês
-                      </span>
-                    </p>
-                  </div>
+                      {/* Header */}
+                      <div className="relative">
+                        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#c29b62]/80 mb-1">
+                          {plan.classesPerWeek}x na semana
+                        </p>
+                        <h3 className="text-2xl font-black text-zinc-100 tracking-tight">
+                          {plan.name}
+                        </h3>
+                      </div>
 
-                  {/* Description */}
-                  {plan.description && (
-                    <div className="relative flex items-start gap-3 mt-auto">
-                      <svg
-                        className="mt-0.5 h-4 w-4 shrink-0 text-[#c29b62]"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2.5}
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M5 13l4 4L19 7"
-                        />
-                      </svg>
-                      <p className="text-sm text-zinc-400 leading-relaxed">
-                        {plan.description}
-                      </p>
+                      {/* Price */}
+                      <div className="relative mt-6 mb-6 pb-6 border-b border-zinc-800/80">
+                        <p className="flex items-baseline gap-1">
+                          <span className="text-sm font-semibold text-[#c29b62] self-start mt-2">
+                            R$
+                          </span>
+                          <span className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#e6c687] via-[#c29b62] to-[#9c753b]">
+                            {Math.floor(plan.price)}
+                          </span>
+                          <span className="text-base font-medium text-zinc-500">
+                            /mês
+                          </span>
+                        </p>
+                      </div>
+
+                      {/* Description */}
+                      {plan.description && (
+                        <div className="relative flex items-start gap-3 mt-auto">
+                          <svg
+                            className="mt-0.5 h-4 w-4 shrink-0 text-[#c29b62]"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2.5}
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                          <p className="text-sm text-zinc-400 leading-relaxed">
+                            {plan.description}
+                          </p>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  ))
+                ) : (
+                  /* Fallback estático */
+                  <>
+                    {[
+                      {
+                        title: "Planos Acessíveis",
+                        desc: "Escolha um plano adequado ao seu nível e agenda. Treine até 5x por semana.",
+                        icon: (
+                          <path
+                            d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        ),
+                      },
+                      {
+                        title: "Professores Especializados",
+                        desc: "Treine com instrutores experientes e focados em sua evolução.",
+                        icon: (
+                          <>
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                            <circle cx="12" cy="7" r="4" />
+                          </>
+                        ),
+                      },
+                      {
+                        title: "Resultados Comprovados",
+                        desc: "Acompanhe seu progresso semanalmente com check-ins e relatórios.",
+                        icon: (
+                          <>
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                            <line x1="16" y1="13" x2="8" y2="13" />
+                            <line x1="16" y1="17" x2="8" y2="17" />
+                          </>
+                        ),
+                      },
+                    ].map((item, i) => (
+                      <div
+                        key={i}
+                        className="group relative flex w-full max-w-sm flex-col items-center text-center rounded-2xl border border-[#c29b62]/15 bg-gradient-to-br from-zinc-900/80 to-black/80 p-10 backdrop-blur-xl transition-all duration-500 hover:border-[#c29b62]/40 hover:shadow-[0_0_30px_rgba(194,155,98,0.1)]"
+                      >
+                        <div className="mb-6 rounded-full border border-[#c29b62]/30 bg-[#c29b62]/10 p-4 text-[#c29b62]">
+                          <svg
+                            width="28"
+                            height="28"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                          >
+                            {item.icon}
+                          </svg>
+                        </div>
+                        <h3 className="text-lg font-bold text-zinc-100">
+                          {item.title}
+                        </h3>
+                        <p className="mt-3 text-sm text-zinc-400 leading-relaxed">
+                          {item.desc}
+                        </p>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            </section>
+
+            {/* NOSSA EQUIPE */}
+            {coaches.length > 0 && (
+              <section
+                id="coaches"
+                className="mt-28 flex flex-col items-center w-full"
+              >
+                <p className="text-sm font-bold uppercase tracking-[0.25em] text-[#c29b62] mb-3">
+                  Treine com os melhores
+                </p>
+                <h2 className="text-3xl sm:text-4xl font-black text-zinc-100 mb-4 drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">
+                  Nossa Equipe
+                </h2>
+                <p className="text-zinc-400 text-sm mb-14 max-w-md text-center">
+                  Instrutores experientes e dedicados à sua evolução no boxe.
+                </p>
+
+                <div className="flex flex-wrap justify-center gap-8 w-full">
+                  {coaches.map((coach, index) => (
+                    <div
+                      key={coach.id}
+                      className="group relative flex w-full max-w-xs flex-col items-center rounded-2xl border border-[#c29b62]/15 bg-gradient-to-br from-zinc-900/80 to-black/80 p-8 pt-10 text-center backdrop-blur-xl transition-all duration-500 hover:border-[#c29b62]/50 hover:shadow-[0_0_40px_rgba(194,155,98,0.12)] hover:-translate-y-1"
+                      style={{ animationDelay: `${index * 100}ms` }}
+                    >
+                      {/* Glow */}
+                      <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#c29b62]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+
+                      {/* Avatar */}
+                      <div className="relative mb-5 flex h-24 w-24 items-center justify-center rounded-full border-2 border-[#c29b62]/60 bg-gradient-to-br from-zinc-800 to-zinc-900 text-2xl font-black text-[#c29b62] uppercase shadow-[0_0_20px_rgba(194,155,98,0.2)] transition-shadow duration-500 group-hover:shadow-[0_0_30px_rgba(194,155,98,0.35)] overflow-hidden">
+                        {coach.photoURL ? (
+                          <img
+                            src={coach.photoURL}
+                            alt={coach.name || ""}
+                            className="w-full h-full object-cover block"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          coach.name
+                            ?.split(" ")
+                            .map((part: string) => part.charAt(0))
+                            .join("")
+                            .slice(0, 2) || "TR"
+                        )}
+                      </div>
+
+                      {/* Info */}
+                      <div className="relative">
+                        <p className="text-lg font-bold text-zinc-100 tracking-tight">
+                          {coach.name}
+                        </p>
+                        <p className="mt-2 text-sm text-[#c29b62]/80 font-medium">
+                          {coach.bio || "Instrutor Especializado"}
+                        </p>
+                      </div>
+
+                      {/* Decorative line */}
+                      <div className="mt-6 h-px w-16 bg-gradient-to-r from-transparent via-[#c29b62]/40 to-transparent" />
+                    </div>
+                  ))}
                 </div>
-              ))
-            ) : (
-              /* Fallback estático */
-              <>
-                {[
-                  {
-                    title: "Planos Acessíveis",
-                    desc: "Escolha um plano adequado ao seu nível e agenda. Treine até 5x por semana.",
-                    icon: (
-                      <path
-                        d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    ),
-                  },
-                  {
-                    title: "Professores Especializados",
-                    desc: "Treine com instrutores experientes e focados em sua evolução.",
-                    icon: (
-                      <>
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                        <circle cx="12" cy="7" r="4" />
-                      </>
-                    ),
-                  },
-                  {
-                    title: "Resultados Comprovados",
-                    desc: "Acompanhe seu progresso semanalmente com check-ins e relatórios.",
-                    icon: (
-                      <>
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                        <polyline points="14 2 14 8 20 8" />
-                        <line x1="16" y1="13" x2="8" y2="13" />
-                        <line x1="16" y1="17" x2="8" y2="17" />
-                      </>
-                    ),
-                  },
-                ].map((item, i) => (
-                  <div
-                    key={i}
-                    className="group relative flex w-full max-w-sm flex-col items-center text-center rounded-2xl border border-[#c29b62]/15 bg-gradient-to-br from-zinc-900/80 to-black/80 p-10 backdrop-blur-xl transition-all duration-500 hover:border-[#c29b62]/40 hover:shadow-[0_0_30px_rgba(194,155,98,0.1)]"
-                  >
-                    <div className="mb-6 rounded-full border border-[#c29b62]/30 bg-[#c29b62]/10 p-4 text-[#c29b62]">
-                      <svg
-                        width="28"
-                        height="28"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                      >
-                        {item.icon}
-                      </svg>
-                    </div>
-                    <h3 className="text-lg font-bold text-zinc-100">
-                      {item.title}
-                    </h3>
-                    <p className="mt-3 text-sm text-zinc-400 leading-relaxed">
-                      {item.desc}
-                    </p>
-                  </div>
-                ))}
-              </>
+              </section>
             )}
-          </div>
-        </section>
 
-        {/* NOSSA EQUIPE */}
-        {coaches.length > 0 && (
-          <section
-            id="coaches"
-            className="mt-28 flex flex-col items-center w-full"
-          >
-            <p className="text-sm font-bold uppercase tracking-[0.25em] text-[#c29b62] mb-3">
-              Treine com os melhores
-            </p>
-            <h2 className="text-3xl sm:text-4xl font-black text-zinc-100 mb-4 drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">
-              Nossa Equipe
-            </h2>
-            <p className="text-zinc-400 text-sm mb-14 max-w-md text-center">
-              Instrutores experientes e dedicados à sua evolução no boxe.
-            </p>
+            {/* CALL TO ACTION BOTTOM */}
+            <section
+              id="contact"
+              className="mt-32 mb-20 flex flex-col items-center text-center"
+            >
+              <p className="text-sm font-bold uppercase tracking-[0.2em] text-zinc-100 drop-shadow-md">
+                Pronto para transformar suas
+              </p>
+              <h2 className="mt-2 text-3xl font-black text-[#c29b62] sm:text-4xl drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">
+                METAS EM REALIDADE?
+              </h2>
+              <a
+                href="https://wa.me/5544999763984?text=Ol%C3%A1!%20Gostaria%20de%20agendar%20uma%20aula%20experimental%20de%20boxe."
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-10 cursor-pointer inline-block rounded-md bg-[#c29b62] px-10 py-4 text-sm font-bold uppercase tracking-wider text-black shadow-[0_0_20px_rgba(194,155,98,0.3)] transition hover:bg-[#d4b075] hover:-translate-y-1"
+              >
+                Agendar Aula Experimental
+              </a>
+            </section>
 
-            <div className="flex flex-wrap justify-center gap-8 w-full">
-              {coaches.map((coach, index) => (
-                <div
-                  key={coach.id}
-                  className="group relative flex w-full max-w-xs flex-col items-center rounded-2xl border border-[#c29b62]/15 bg-gradient-to-br from-zinc-900/80 to-black/80 p-8 pt-10 text-center backdrop-blur-xl transition-all duration-500 hover:border-[#c29b62]/50 hover:shadow-[0_0_40px_rgba(194,155,98,0.12)] hover:-translate-y-1"
-                  style={{ animationDelay: `${index * 100}ms` }}
-                >
-                  {/* Glow */}
-                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#c29b62]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-
-                  {/* Avatar */}
-                  <div className="relative mb-5 flex h-24 w-24 items-center justify-center rounded-full border-2 border-[#c29b62]/60 bg-gradient-to-br from-zinc-800 to-zinc-900 text-2xl font-black text-[#c29b62] uppercase shadow-[0_0_20px_rgba(194,155,98,0.2)] transition-shadow duration-500 group-hover:shadow-[0_0_30px_rgba(194,155,98,0.35)] overflow-hidden">
-                    {coach.photoURL ? (
-                      <img 
-                        src={coach.photoURL} 
-                        alt={coach.name || ""} 
-                        className="w-full h-full object-cover block"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      coach.name
-                        ?.split(" ")
-                        .map((part: string) => part.charAt(0))
-                        .join("")
-                        .slice(0, 2) || "TR"
-                    )}
-                  </div>
-
-                  {/* Info */}
-                  <div className="relative">
-                    <p className="text-lg font-bold text-zinc-100 tracking-tight">
-                      {coach.name}
-                    </p>
-                    <p className="mt-2 text-sm text-[#c29b62]/80 font-medium">
-                      {coach.bio || "Instrutor Especializado"}
-                    </p>
-                  </div>
-
-                  {/* Decorative line */}
-                  <div className="mt-6 h-px w-16 bg-gradient-to-r from-transparent via-[#c29b62]/40 to-transparent" />
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* CALL TO ACTION BOTTOM */}
-        <section
-          id="contact"
-          className="mt-32 mb-20 flex flex-col items-center text-center"
-        >
-          <p className="text-sm font-bold uppercase tracking-[0.2em] text-zinc-100 drop-shadow-md">
-            Pronto para transformar suas
-          </p>
-          <h2 className="mt-2 text-3xl font-black text-[#c29b62] sm:text-4xl drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">
-            METAS EM REALIDADE?
-          </h2>
-          <a
-            href="https://wa.me/5544999763984?text=Ol%C3%A1!%20Gostaria%20de%20agendar%20uma%20aula%20experimental%20de%20boxe."
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-10 cursor-pointer inline-block rounded-md bg-[#c29b62] px-10 py-4 text-sm font-bold uppercase tracking-wider text-black shadow-[0_0_20px_rgba(194,155,98,0.3)] transition hover:bg-[#d4b075] hover:-translate-y-1"
-          >
-            Agendar Aula Experimental
-          </a>
-        </section>
-
-        {/* Footer moved to RootLayout to avoid duplicate/dynamic rendering */}
-      </main>
+            {/* Footer moved to RootLayout to avoid duplicate/dynamic rendering */}
+          </main>
+        </>
+      )}
     </div>
   );
 }

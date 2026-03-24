@@ -63,14 +63,20 @@ service cloud.firestore {
       allow read: if isSignedIn();
 
       // Students can only create check-ins for themselves,
-      // for their current active plan.
+      // for their current active plan, and with payment up to date.
       allow create: if isStudent() &&
         request.resource.data.userId == request.auth.uid &&
         request.resource.data.planId is string &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.planId
           == request.resource.data.planId &&
         get(/databases/$(database)/documents/plans/$(request.resource.data.planId)).data.active
-          == true;
+          == true &&
+        // Payment check: allow if no due day is set OR payment is marked as paid
+        (
+          !('paymentDueDay' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data) ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.paymentDueDay == null ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.monthlyPaymentPaid == true
+        );
 
       // Check-ins are append-only to manter histórico confiável.
       allow update, delete: if false;

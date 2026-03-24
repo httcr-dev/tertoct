@@ -2,6 +2,10 @@ import { initializeApp, getApps, FirebaseApp } from "firebase/app";
 import {
   getAuth,
   GoogleAuthProvider,
+  signInWithRedirect,
+  getRedirectResult,
+  setPersistence,
+  browserLocalPersistence,
   type Auth,
   type User,
 } from "firebase/auth";
@@ -26,6 +30,8 @@ export interface AppUserProfile {
   planId?: string | null;
   active: boolean;
   createdAt?: Date | null;
+  paymentDueDay?: number | null;
+  monthlyPaymentPaid?: boolean;
 }
 
 let firebaseApp: FirebaseApp | undefined;
@@ -58,6 +64,10 @@ function getFirebaseApp(): FirebaseApp {
 export function getFirebaseAuth(): Auth {
   if (!authInstance) {
     authInstance = getAuth(getFirebaseApp());
+    // Set persistence to LOCAL (survives page refresh and browser close)
+    setPersistence(authInstance, browserLocalPersistence).catch((error) => {
+      console.error("Failed to set persistence:", error);
+    });
   }
 
   return authInstance;
@@ -108,7 +118,7 @@ export async function ensureUserDocument(user: User): Promise<AppUserProfile> {
 
   const data = snap.data() as any;
   const updates: any = {};
-  
+
   // Sync name, email and photoURL if they are missing or different
   if (user.displayName && data.name !== user.displayName) {
     updates.name = user.displayName;
@@ -137,5 +147,7 @@ export async function ensureUserDocument(user: User): Promise<AppUserProfile> {
     planId: data.planId ?? null,
     active: data.active ?? true,
     createdAt: data.createdAt?.toDate?.() ?? null,
+    paymentDueDay: data.paymentDueDay ?? null,
+    monthlyPaymentPaid: data.monthlyPaymentPaid ?? false,
   };
 }

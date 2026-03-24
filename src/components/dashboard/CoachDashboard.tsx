@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import {
   collection,
   doc,
@@ -30,6 +30,8 @@ interface StudentSummary {
   planId?: string | null;
   weeklyCheckIns: number;
   active?: boolean;
+  paymentDueDay?: number | null;
+  monthlyPaymentPaid?: boolean;
 }
 
 export function CoachDashboard() {
@@ -41,6 +43,7 @@ export function CoachDashboard() {
   const [selectedPlanId, setSelectedPlanId] = useState<string>("all");
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
   const [editingFields, setEditingFields] = useState<Partial<Plan>>({});
+  const editPlanRef = useRef<HTMLDivElement>(null);
   const [checkinModalOpen, setCheckinModalOpen] = useState(false);
   const [selectedStudentForHistory, setSelectedStudentForHistory] =
     useState<StudentSummary | null>(null);
@@ -275,6 +278,8 @@ export function CoachDashboard() {
             photoURL: data.photoURL ?? null,
             planId: data.planId ?? null,
             weeklyCheckIns: 0,
+            paymentDueDay: data.paymentDueDay ?? null,
+            monthlyPaymentPaid: data.monthlyPaymentPaid ?? false,
             ...(data.active !== undefined ? { active: !!data.active } : {}),
           });
         });
@@ -373,7 +378,9 @@ export function CoachDashboard() {
       description: plan.description,
       active: plan.active,
     });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setTimeout(() => {
+      editPlanRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
   };
 
   const handleCreatePlan = async () => {
@@ -395,7 +402,9 @@ export function CoachDashboard() {
       description: "",
       active: true,
     });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setTimeout(() => {
+      editPlanRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
   };
 
   const handleSaveEditPlan = async () => {
@@ -539,6 +548,25 @@ export function CoachDashboard() {
     });
   };
 
+  const handleSetPaymentDay = async (studentId: string, day: number | null) => {
+    const ref = doc(db, "users", studentId);
+    if (day === null) {
+      await updateDoc(ref, {
+        paymentDueDay: deleteField(),
+        monthlyPaymentPaid: deleteField(),
+      });
+    } else {
+      await updateDoc(ref, { paymentDueDay: day });
+    }
+  };
+
+  const handleTogglePayment = async (student: StudentSummary) => {
+    const ref = doc(db, "users", student.id);
+    await updateDoc(ref, {
+      monthlyPaymentPaid: !student.monthlyPaymentPaid,
+    });
+  };
+
   const handleNavigateToCoaches = () => {
     // navigate to students section
     setSelectedTab("students");
@@ -546,8 +574,8 @@ export function CoachDashboard() {
 
   return (
     <div className="flex min-h-screen bg-transparent text-zinc-50 selection:bg-amber-500/30">
-      {/* Sidebar */}
-      <aside className="w-64 flex-shrink-0 border-r border-zinc-800/40 bg-black/20 backdrop-blur-xl p-6 lg:flex flex-col">
+      {/* Sidebar - hidden on mobile */}
+      <aside className="w-64 flex-shrink-0 border-r border-zinc-800/40 bg-black/20 backdrop-blur-xl p-6 hidden md:flex flex-col">
         <div className="mb-10 px-2 mt-2">
           <div className="flex items-center gap-3">
             <img src="/logo-academy.png" alt="TertoCT Logo" className="h-10 w-10 object-contain" />
@@ -593,8 +621,27 @@ export function CoachDashboard() {
         </nav>
       </aside>
 
+      {/* Mobile bottom nav */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 flex md:hidden items-center justify-around border-t border-zinc-800/60 bg-black/90 backdrop-blur-xl px-2 py-2">
+        {[
+          { tab: "overview" as const, icon: <Home className="h-5 w-5" />, label: "Início" },
+          { tab: "plans" as const, icon: <List className="h-5 w-5" />, label: "Planos" },
+          { tab: "students" as const, icon: <Users className="h-5 w-5" />, label: "Alunos" },
+          { tab: "checkins" as const, icon: <CheckCircle className="h-5 w-5" />, label: "Check-ins" },
+        ].map(({ tab, icon, label }) => (
+          <button
+            key={tab}
+            onClick={() => setSelectedTab(tab)}
+            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-[10px] font-medium transition-colors cursor-pointer ${selectedTab === tab ? "text-amber-500" : "text-zinc-500"}`}
+          >
+            {icon}
+            {label}
+          </button>
+        ))}
+      </nav>
+
       {/* Main content */}
-      <main className="flex-1 px-8 py-6">
+      <main className="flex-1 px-4 md:px-8 py-6 pb-20 md:pb-6">
         <div className="flex min-h-screen flex-col gap-8 pb-8 max-w-6xl mx-auto">
           <header className="flex items-center justify-between border-b border-zinc-800/50 pb-6 pt-2">
             <div>
@@ -685,11 +732,11 @@ export function CoachDashboard() {
                 </p>
               </div>
 
-              <div className="col-span-3 mt-2 rounded-2xl border border-zinc-800/60 bg-zinc-900/40 p-6">
-                <h3 className="text-sm font-medium text-zinc-200">
+              <div className="md:col-span-3 mt-2 rounded-2xl border border-zinc-800/60 bg-zinc-900/40 p-6 overflow-x-auto">
+                <h3 className="text-sm font-medium text-zinc-200 whitespace-nowrap">
                   Atividade de Check-ins (14 dias)
                 </h3>
-                <div className="mt-6">
+                <div className="mt-6 min-w-[500px]">
                   <BarChart dataItems={recentCheckins} ds={14} />
                 </div>
               </div>
@@ -770,7 +817,7 @@ export function CoachDashboard() {
 
               {/* Edit Plan Panel */}
               {editingPlan && (
-                <div className="mt-8 rounded-2xl border border-amber-500/30 bg-zinc-900/60 p-6 max-w-3xl">
+                <div ref={editPlanRef} className="mt-8 rounded-2xl border border-amber-500/30 bg-zinc-900/60 p-6 max-w-3xl">
                   <h3 className="text-lg font-semibold text-amber-500 mb-5">
                     Editando plano: <span className="text-zinc-100">{editingPlan.name}</span>
                   </h3>
@@ -834,27 +881,27 @@ export function CoachDashboard() {
                       />
                     </div>
                   </div>
-                  <div className="mt-6 flex gap-3 justify-end border-t border-zinc-800/60 pt-6">
-                    <button
-                      onClick={() => {
-                        setEditingPlan(null);
-                        setEditingFields({});
-                      }}
-                      className="rounded-full border border-zinc-700 px-6 py-2.5 text-sm font-medium text-zinc-300 hover:bg-zinc-800 transition-colors cursor-pointer"
-                    >
-                      Cancelar
-                    </button>
+                  <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-end border-t border-zinc-800/60 pt-6">
                     {!editingPlan?.id.startsWith("new_plan_") && (
                       <button
                         onClick={() => handleDeletePlan(editingPlan!)}
-                        className="rounded-full border border-red-500/30 text-red-400 bg-red-500/10 px-6 py-2.5 text-sm font-medium hover:bg-red-500/20 transition-colors mr-auto cursor-pointer"
+                        className="order-3 sm:order-1 sm:mr-auto rounded-full border border-red-500/30 text-red-400 bg-red-500/10 px-6 py-2.5 text-sm font-medium hover:bg-red-500/20 transition-colors cursor-pointer w-full sm:w-auto"
                       >
                         Excluir
                       </button>
                     )}
                     <button
+                      onClick={() => {
+                        setEditingPlan(null);
+                        setEditingFields({});
+                      }}
+                      className="order-2 sm:order-2 rounded-full border border-zinc-700 px-6 py-2.5 text-sm font-medium text-zinc-300 hover:bg-zinc-800 transition-colors cursor-pointer w-full sm:w-auto"
+                    >
+                      Cancelar
+                    </button>
+                    <button
                       onClick={handleSaveEditPlan}
-                      className="rounded-full bg-amber-500 px-6 py-2.5 text-sm font-semibold text-black hover:bg-amber-400 transition-colors shadow-[0_0_15px_rgba(245,158,11,0.2)] cursor-pointer"
+                      className="order-1 sm:order-3 rounded-full bg-amber-500 px-6 py-2.5 text-sm font-semibold text-black hover:bg-amber-400 transition-colors shadow-[0_0_15px_rgba(245,158,11,0.2)] cursor-pointer w-full sm:w-auto"
                     >
                       {editingPlan?.id.startsWith("new_plan_") ? "Salvar Novo Plano" : "Salvar Alterações"}
                     </button>
@@ -982,56 +1029,98 @@ export function CoachDashboard() {
                   return (
                     <div
                       key={student.id}
-                      className="flex flex-col sm:flex-row sm:items-center justify-between rounded-xl border border-zinc-800/60 bg-zinc-900/40 px-5 py-4 gap-4 hover:border-zinc-700 transition-colors"
+                      className="rounded-xl border border-zinc-800/60 bg-zinc-900/40 px-5 py-4 hover:border-zinc-700 transition-colors"
                     >
-                      <div 
-                        className="flex items-center gap-4 cursor-pointer flex-1"
-                        onClick={() => viewCheckins(student)}
-                      >
-                        <div className="h-10 w-10 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-300 font-medium shrink-0 overflow-hidden border border-zinc-700/50">
-                          {student.photoURL ? (
-                            <img 
-                              src={student.photoURL} 
-                              alt={student.name || ""} 
-                              className="w-full h-full object-cover block"
-                              referrerPolicy="no-referrer"
-                            />
-                          ) : (
-                            student.name ? student.name.charAt(0).toUpperCase() : "U"
-                          )}
+                      {/* Main row: avatar + info + plan select */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div 
+                          className="flex items-center gap-4 cursor-pointer flex-1 min-w-0"
+                          onClick={() => viewCheckins(student)}
+                        >
+                          <div className="h-10 w-10 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-300 font-medium shrink-0 overflow-hidden border border-zinc-700/50">
+                            {student.photoURL ? (
+                              <img 
+                                src={student.photoURL} 
+                                alt={student.name || ""} 
+                                className="w-full h-full object-cover block"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              student.name ? student.name.charAt(0).toUpperCase() : "U"
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-zinc-100 truncate">
+                              {student.name ?? "Aluno sem nome"}
+                            </p>
+                            <p className="text-xs text-zinc-400 mt-0.5 truncate">
+                              {student.email ?? "sem e-mail"}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm font-semibold text-zinc-100 group-hover:text-amber-400 transition-colors">
-                            {student.name ?? "Aluno sem nome"}
-                          </p>
-                          <p className="text-xs text-zinc-400 mt-0.5">
-                            {student.email ?? "sem e-mail"}
-                          </p>
+                        <div className="flex items-center gap-4 shrink-0">
+                          <div className="text-right hidden sm:block">
+                            <p className={`text-xs font-medium ${currentPlan ? "text-emerald-400" : "text-zinc-500"}`}>
+                              {currentPlan ? currentPlan.name : "Sem plano"}
+                            </p>
+                            <p className="text-[11px] text-amber-500 mt-0.5">
+                              {student.weeklyCheckIns} check-in{student.weeklyCheckIns === 1 ? "" : "s"} hoje/semana
+                            </p>
+                          </div>
+                          <select
+                            className="rounded-lg border border-zinc-700 bg-black/50 px-3 py-2 text-xs text-zinc-300 focus:outline-none focus:border-amber-500/50"
+                            value={student.planId ?? ""}
+                            onChange={(e) =>
+                              handleAssignPlan(student.id, e.target.value || null)
+                            }
+                          >
+                            <option value="">Sem plano</option>
+                            {plans.map((plan) => (
+                              <option key={plan.id} value={plan.id}>
+                                {plan.name}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                       </div>
-                      <div className="flex items-center gap-5 justify-between sm:justify-start">
-                        <div className="text-right hidden sm:block">
-                          <p className={`text-xs font-medium ${currentPlan ? "text-emerald-400" : "text-zinc-500"}`}>
-                            {currentPlan ? currentPlan.name : "Sem plano"}
-                          </p>
-                          <p className="text-[11px] text-amber-500 mt-0.5">
-                            {student.weeklyCheckIns} check-in{student.weeklyCheckIns === 1 ? "" : "s"} hoje/semana
-                          </p>
+                      {/* Payment row */}
+                      <div className="flex items-center gap-3 mt-3 pt-3 border-t border-zinc-800/40 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold whitespace-nowrap">Vencimento:</span>
+                          <select
+                            className="rounded-lg border border-zinc-700 bg-black/50 px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-amber-500/50"
+                            value={student.paymentDueDay ?? ""}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              handleSetPaymentDay(student.id, val ? Number(val) : null);
+                            }}
+                          >
+                            <option value="">Nenhum</option>
+                            {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                              <option key={d} value={d}>
+                                Dia {d}
+                              </option>
+                            ))}
+                          </select>
                         </div>
-                        <select
-                          className="rounded-lg border border-zinc-700 bg-black/50 px-3 py-2 text-xs text-zinc-300 focus:outline-none focus:border-amber-500/50"
-                          value={student.planId ?? ""}
-                          onChange={(e) =>
-                            handleAssignPlan(student.id, e.target.value || null)
-                          }
-                        >
-                          <option value="">Sem plano</option>
-                          {plans.map((plan) => (
-                            <option key={plan.id} value={plan.id}>
-                              {plan.name}
-                            </option>
-                          ))}
-                        </select>
+                        {student.paymentDueDay != null ? (
+                          <button
+                            onClick={() => handleTogglePayment(student)}
+                            className={`rounded-full px-3.5 py-1 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                              student.monthlyPaymentPaid
+                                ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25"
+                                : "bg-red-500/15 text-red-400 border border-red-500/30 hover:bg-red-500/25 animate-pulse"
+                            }`}
+                          >
+                            {student.monthlyPaymentPaid ? (
+                              <><span>✓</span> Pago</>
+                            ) : (
+                              <><span>✕</span> Pendente</>
+                            )}
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-zinc-600 italic">Sem controle de pagamento</span>
+                        )}
                       </div>
                     </div>
                   );

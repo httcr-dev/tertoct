@@ -208,9 +208,7 @@ export function StudentDashboard() {
       const checkInsRef = collection(db, "checkins");
       const qCheckins = query(
         checkInsRef,
-        where("userId", "==", profile.id),
-        orderBy("createdAt", "desc"),
-        limit(50),
+        where("userId", "==", profile.id)
       );
 
       unsubCheckins = onSnapshot(qCheckins, (snap) => {
@@ -225,7 +223,10 @@ export function StudentDashboard() {
             createdAt: createdAt?.toDate() ?? new Date(),
           });
         });
+        next.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
         setCheckIns(next);
+      }, (error) => {
+        console.error("Error fetching checkins:", error);
       });
 
       // Fetch all active plans
@@ -305,11 +306,23 @@ export function StudentDashboard() {
     };
   }, [checkIns, plan, profile]);
 
+  // Payment overdue check
+  const isPaymentOverdue = useMemo(() => {
+    if (!profile) return false;
+    const dueDay = (profile as any).paymentDueDay;
+    const isPaid = (profile as any).monthlyPaymentPaid;
+    if (dueDay == null) return false; // No due day set, no restriction
+    if (isPaid) return false; // Already paid
+    const currentDay = new Date().getDate();
+    return currentDay > dueDay;
+  }, [profile]);
+
   const canCheckIn = !!(
     plan &&
     currentWeekInfo &&
     currentWeekInfo.remaining > 0 &&
-    plan.active
+    plan.active &&
+    !isPaymentOverdue
   );
 
   const handleCheckIn = async () => {
@@ -417,8 +430,27 @@ export function StudentDashboard() {
         </nav>
       </aside>
 
+      {/* Mobile bottom nav */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 flex md:hidden items-center justify-around border-t border-zinc-800/60 bg-black/90 backdrop-blur-xl px-2 py-2">
+        {[
+          { tab: "overview" as const, icon: <Home className="h-5 w-5" />, label: "Início" },
+          { tab: "checkin" as const, icon: <CheckCircle className="h-5 w-5" />, label: "Check-in" },
+          { tab: "plans" as const, icon: <List className="h-5 w-5" />, label: "Planos" },
+          { tab: "professors" as const, icon: <Users className="h-5 w-5" />, label: "Profs" },
+        ].map(({ tab, icon, label }) => (
+          <button
+            key={tab}
+            onClick={() => setSelectedTab(tab)}
+            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-[10px] font-medium transition-colors cursor-pointer ${selectedTab === tab ? "text-amber-500" : "text-zinc-500"}`}
+          >
+            {icon}
+            {label}
+          </button>
+        ))}
+      </nav>
+
       {/* Main content */}
-      <main className="flex-1 px-8 py-6 overflow-y-auto">
+      <main className="flex-1 px-4 md:px-8 py-6 pb-20 md:pb-6 overflow-y-auto">
         <div className="flex flex-col gap-8 pb-8 max-w-5xl mx-auto">
           <header className="flex items-center justify-between border-b border-zinc-800/40 pb-6 pt-2 backdrop-blur-sm">
             <div>
@@ -454,6 +486,18 @@ export function StudentDashboard() {
 
           {selectedTab === "overview" && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              {/* Payment Overdue Banner */}
+              {isPaymentOverdue && (
+                <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 flex items-center gap-4 backdrop-blur-sm">
+                  <div className="h-10 w-10 rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center shrink-0">
+                    <span className="text-lg font-bold">!</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-red-400">Mensalidade Pendente</p>
+                    <p className="text-xs text-red-400/70 mt-0.5">Seu check-in está bloqueado. Procure seu professor para regularizar o pagamento.</p>
+                  </div>
+                </div>
+              )}
               <section className="grid gap-6 md:grid-cols-2">
                 {/* Current Plan Card */}
                 <div className="rounded-3xl border border-amber-500/20 bg-zinc-900/30 p-6 backdrop-blur-md gold-glow">
@@ -633,6 +677,8 @@ export function StudentDashboard() {
                           "Aguardando Plano"
                         ) : !plan.active ? (
                           "Plano Inativo"
+                        ) : isPaymentOverdue ? (
+                          "Mensalidade Pendente"
                         ) : canCheckIn ? (
                           "REALIZAR CHECK-IN"
                         ) : (
@@ -642,7 +688,8 @@ export function StudentDashboard() {
 
                       {!canCheckIn && (
                         <p className="text-red-400/80 text-xs font-medium bg-red-500/5 py-2 rounded-full border border-red-500/10">
-                          {!plan ? "Seu perfil não possui um plano associado." : 
+                          {isPaymentOverdue ? "Mensalidade pendente. Procure seu professor para regularizar." :
+                           !plan ? "Seu perfil não possui um plano associado." : 
                            !plan.active ? "Este plano está desativado pela administração." :
                            currentWeekInfo && currentWeekInfo.remaining <= 0 ? "Você atingiu o limite de check-ins para esta semana." :
                            "Não é possível fazer check-in no momento."}
