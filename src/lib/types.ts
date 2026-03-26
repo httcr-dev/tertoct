@@ -19,14 +19,14 @@ export interface UserDocument {
   createdAt: Timestamp;
   paymentDueDay?: number | null;
   monthlyPaymentPaid?: boolean;
-  paymentValidUntil?: any;
+  paymentValidUntil?: Timestamp | null;
 }
 
 export interface CheckIn {
   id: string;
   userId: string;
   planId: string;
-  createdAt: any; // Can be Timestamp or Date depending on source
+  createdAt: Date;
 }
 
 export interface StudentSummary {
@@ -39,5 +39,5 @@ export interface StudentSummary {
   active?: boolean;
   paymentDueDay?: number | null;
   monthlyPaymentPaid?: boolean;
-  paymentValidUntil?: any;
+  paymentValidUntil?: Timestamp | null;
 }

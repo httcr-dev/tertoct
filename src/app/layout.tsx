@@ -33,7 +33,6 @@ export default function RootLayout({
           <p className="text-sm">
             &copy; 2026 TertoCT. Todos os direitos reservados.
           </p>
-          <p className="text-xs">Desenvolvido com ❤️ por Heitor</p>
         </footer>
       </body>
     </html>

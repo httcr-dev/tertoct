@@ -35,7 +35,9 @@ export function PlansTab({
     <section className="space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h2 className="text-lg font-semibold text-zinc-50">Planos e Preços</h2>
+          <h2 className="text-lg font-semibold text-zinc-50">
+            Planos e valores
+          </h2>
           <p className="text-sm text-zinc-400">
             Gerencie os planos disponíveis e o limite de check-ins semanais.
           </p>

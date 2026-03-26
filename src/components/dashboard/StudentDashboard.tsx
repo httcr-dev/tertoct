@@ -1,18 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
   getDocs,
-  limit,
-  orderBy,
   query,
   Timestamp,
   where,
-  serverTimestamp,
   onSnapshot,
   type DocumentData,
 } from "firebase/firestore";
@@ -21,17 +17,11 @@ import type { Plan, CheckIn } from "@/lib/types";
 import { useAuth } from "../auth/AuthProvider";
 import { Home, List, Users, CheckCircle, LogOut } from "lucide-react";
 import { BarChart } from "@/components/ui/BarChart";
+import { isPaymentOverdue } from "@/lib/utils/payment";
+import { startOfWeek } from "@/lib/utils/date";
+import { createCheckIn } from "@/services/checkinService";
 
-function startOfWeek(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = (day === 0 ? -6 : 1) - day; // Monday as first day
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-
+type StudentTab = "overview" | "checkin" | "plans" | "professors";
 
 export function StudentDashboard() {
   const { profile, signOutUser } = useAuth();
@@ -43,10 +33,9 @@ export function StudentDashboard() {
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-  const [selectedTab, setSelectedTab] = useState<
-    "overview" | "checkin" | "plans" | "professors"
-  >("overview");
+  const [selectedTab, setSelectedTab] = useState<StudentTab>("overview");
 
+  // ── Data loading ─────────────────────────────────────────────────────
   useEffect(() => {
     let unsubCheckins: (() => void) | undefined;
 
@@ -55,10 +44,11 @@ export function StudentDashboard() {
 
       const tasks: Promise<void>[] = [];
 
-      if ((profile as any).planId) {
+      // Load current student plan
+      if (profile.planId) {
         tasks.push(
           (async () => {
-            const ref = doc(db, "plans", (profile as any).planId as string);
+            const ref = doc(db, "plans", profile.planId as string);
             const snap = await getDoc(ref);
             if (snap.exists()) {
               const data = snap.data() as DocumentData;
@@ -75,6 +65,7 @@ export function StudentDashboard() {
         );
       }
 
+      // Real-time check-ins listener
       const checkInsRef = collection(db, "checkins");
       const qCheckins = query(checkInsRef, where("userId", "==", profile.id));
 
@@ -95,17 +86,14 @@ export function StudentDashboard() {
           next.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
           setCheckIns(next);
         },
-        (error) => {
-          console.error("Error fetching checkins:", error);
-        },
+        (error) => console.error("Error fetching checkins:", error),
       );
 
       // Fetch all active plans
       tasks.push(
         (async () => {
           const plansRef = collection(db, "plans");
-          const q = query(plansRef);
-          const snap = await getDocs(q);
+          const snap = await getDocs(query(plansRef));
           const next: Plan[] = [];
           snap.forEach((docSnap) => {
             const data = docSnap.data();
@@ -120,18 +108,17 @@ export function StudentDashboard() {
               });
             }
           });
-          setPlans(
-            next.sort((a, b) => (a.name || "").localeCompare(b.name || "")),
-          );
+          setPlans(next.sort((a, b) => a.name.localeCompare(b.name)));
         })(),
       );
 
-      // Fetch all active professors
+      // Fetch all active coaches
       tasks.push(
         (async () => {
           const usersRef = collection(db, "users");
-          const q = query(usersRef, where("role", "==", "coach"));
-          const snap = await getDocs(q);
+          const snap = await getDocs(
+            query(usersRef, where("role", "==", "coach")),
+          );
           const next: any[] = [];
           snap.forEach((docSnap) => {
             const data = docSnap.data();
@@ -139,105 +126,61 @@ export function StudentDashboard() {
               next.push({ id: docSnap.id, ...data });
             }
           });
-
           setProfessors(next);
         })(),
       );
 
       try {
         await Promise.all(tasks);
-      } catch (err) {
-        // failed to load constants
       } finally {
         setLoading(false);
       }
     };
 
     load();
-
-    return () => {
-      if (unsubCheckins) unsubCheckins();
-    };
+    return () => unsubCheckins?.();
   }, [db, profile]);
 
+  // ── Derived state ────────────────────────────────────────────────────
   const currentWeekInfo = useMemo(() => {
     if (!plan || !profile) return null;
-    const now = new Date();
-    const weekStart = startOfWeek(now);
-    const weekStartTime = weekStart.getTime();
-    const weekCheckIns = checkIns.filter((c) => {
-      const d = c.createdAt;
-      return d.getTime() >= weekStartTime;
-    });
+    const weekStartTime = startOfWeek(new Date()).getTime();
+    const weekCheckIns = checkIns.filter(
+      (c) => c.createdAt.getTime() >= weekStartTime,
+    );
 
     return {
-      weekStart,
       count: weekCheckIns.length,
       allowed: plan.classesPerWeek,
       remaining: Math.max(plan.classesPerWeek - weekCheckIns.length, 0),
     };
   }, [checkIns, plan, profile]);
 
-  // Payment overdue check
-  const isPaymentOverdue = useMemo(() => {
-    if (!profile) return false;
-    const dueDay = (profile as any).paymentDueDay;
-    if (dueDay == null) return false; // No due day set, no restriction
-    
-    // Check if there's a valid expiration date set by coach
-    const validUntil = (profile as any).paymentValidUntil as Timestamp | undefined;
-    const now = new Date();
-
-    if (validUntil) {
-      // If we have a validUntil date, we strictly rely on it.
-      return now.getTime() > validUntil.toDate().getTime();
-    }
-
-    // Fallback for older records
-    const isPaid = (profile as any).monthlyPaymentPaid;
-    if (isPaid) return false; // Already paid
-    
-    const currentDay = now.getDate();
-    return currentDay > dueDay;
-  }, [profile]);
+  const paymentOverdue = useMemo(() => isPaymentOverdue(profile), [profile]);
 
   const canCheckIn = !!(
     plan &&
     currentWeekInfo &&
     currentWeekInfo.remaining > 0 &&
     plan.active &&
-    !isPaymentOverdue
+    !paymentOverdue
   );
 
-  const handleCheckIn = async () => {
-    if (!profile || !plan || !currentWeekInfo || !canCheckIn || creating) {
-      return;
-    }
+  // ── Check-in handler ─────────────────────────────────────────────────
+  const handleCheckIn = useCallback(async () => {
+    if (!profile || !plan || !canCheckIn || creating) return;
 
     setCreating(true);
     try {
-      const checkInsRef = collection(db, "checkins");
-      const now = new Date();
-      await addDoc(checkInsRef, {
-        userId: profile.id,
-        planId: plan.id,
-        createdAt: serverTimestamp(),
-      });
-
-      setCheckIns((prev) => [
-        {
-          id: `local-${now.getTime()}`,
-          userId: profile.id,
-          planId: plan.id,
-          createdAt: now,
-        },
-        ...prev,
-      ]);
+      await createCheckIn(profile.id, plan.id);
+      // Brief delay for visual feedback
+      await new Promise((resolve) => setTimeout(resolve, 800));
     } finally {
       setCreating(false);
     }
-  };
+  }, [profile, plan, canCheckIn, creating]);
 
+  // ── Loading state ────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-black text-zinc-100">
@@ -248,6 +191,7 @@ export function StudentDashboard() {
     );
   }
 
+  // ── Render ───────────────────────────────────────────────────────────
   return (
     <div className="flex min-h-screen bg-transparent text-zinc-50 selection:bg-amber-500/30">
       {/* Sidebar */}
@@ -265,77 +209,40 @@ export function StudentDashboard() {
           </div>
         </div>
         <nav className="flex flex-col gap-1.5 flex-1">
-          <button
-            onClick={() => setSelectedTab("overview")}
-            className={`flex items-center gap-3 w-full text-left rounded-lg px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer ${
-              selectedTab === "overview"
-                ? "bg-zinc-800/60 text-zinc-100"
-                : "text-zinc-400 hover:text-zinc-200"
-            }`}
-          >
-            <Home className="h-[18px] w-[18px]" strokeWidth={2} />
-            Início
-          </button>
-          <button
-            onClick={() => setSelectedTab("checkin")}
-            className={`flex items-center gap-3 w-full text-left rounded-lg px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer ${
-              selectedTab === "checkin"
-                ? "bg-zinc-800/60 text-zinc-100"
-                : "text-zinc-400 hover:text-zinc-200"
-            }`}
-          >
-            <CheckCircle className="h-[18px] w-[18px]" strokeWidth={2} />
-            Check-in
-          </button>
-          <button
-            onClick={() => setSelectedTab("plans")}
-            className={`flex items-center gap-3 w-full text-left rounded-lg px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer ${
-              selectedTab === "plans"
-                ? "bg-zinc-800/60 text-zinc-100"
-                : "text-zinc-400 hover:text-zinc-200"
-            }`}
-          >
-            <List className="h-[18px] w-[18px]" strokeWidth={2} />
-            Planos
-          </button>
-          <button
-            onClick={() => setSelectedTab("professors")}
-            className={`flex items-center gap-3 w-full text-left rounded-lg px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer ${
-              selectedTab === "professors"
-                ? "bg-zinc-800/60 text-zinc-100"
-                : "text-zinc-400 hover:text-zinc-200"
-            }`}
-          >
-            <Users className="h-[18px] w-[18px]" strokeWidth={2} />
-            Professores
-          </button>
+          {(
+            [
+              { tab: "overview", icon: Home, label: "Início" },
+              { tab: "checkin", icon: CheckCircle, label: "Check-in" },
+              { tab: "plans", icon: List, label: "Planos" },
+              { tab: "professors", icon: Users, label: "Professores" },
+            ] as const
+          ).map(({ tab, icon: Icon, label }) => (
+            <button
+              key={tab}
+              onClick={() => setSelectedTab(tab)}
+              className={`flex items-center gap-3 w-full text-left rounded-lg px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer ${
+                selectedTab === tab
+                  ? "bg-zinc-800/60 text-zinc-100"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
+              {label}
+            </button>
+          ))}
         </nav>
       </aside>
 
       {/* Mobile bottom nav */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 flex md:hidden items-center justify-around border-t border-zinc-800/60 bg-black/90 backdrop-blur-xl px-2 py-2">
-        {[
-          {
-            tab: "overview" as const,
-            icon: <Home className="h-5 w-5" />,
-            label: "Início",
-          },
-          {
-            tab: "checkin" as const,
-            icon: <CheckCircle className="h-5 w-5" />,
-            label: "Check-in",
-          },
-          {
-            tab: "plans" as const,
-            icon: <List className="h-5 w-5" />,
-            label: "Planos",
-          },
-          {
-            tab: "professors" as const,
-            icon: <Users className="h-5 w-5" />,
-            label: "Profs",
-          },
-        ].map(({ tab, icon, label }) => (
+        {(
+          [
+            { tab: "overview" as const, icon: <Home className="h-5 w-5" />, label: "Início" },
+            { tab: "checkin" as const, icon: <CheckCircle className="h-5 w-5" />, label: "Check-in" },
+            { tab: "plans" as const, icon: <List className="h-5 w-5" />, label: "Planos" },
+            { tab: "professors" as const, icon: <Users className="h-5 w-5" />, label: "Profs" },
+          ]
+        ).map(({ tab, icon, label }) => (
           <button
             key={tab}
             onClick={() => setSelectedTab(tab)}
@@ -384,7 +291,7 @@ export function StudentDashboard() {
           {selectedTab === "overview" && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
               {/* Payment Overdue Banner */}
-              {isPaymentOverdue && (
+              {paymentOverdue && (
                 <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 flex items-center gap-4 backdrop-blur-sm">
                   <div className="h-10 w-10 rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center shrink-0">
                     <span className="text-lg font-bold">!</span>
@@ -581,7 +488,7 @@ export function StudentDashboard() {
                           "Aguardando Plano"
                         ) : !plan.active ? (
                           "Plano Inativo"
-                        ) : isPaymentOverdue ? (
+                        ) : paymentOverdue ? (
                           "Mensalidade Pendente"
                         ) : canCheckIn ? (
                           "REALIZAR CHECK-IN"
@@ -592,7 +499,7 @@ export function StudentDashboard() {
 
                       {!canCheckIn && (
                         <p className="text-red-400/80 text-xs font-medium bg-red-500/5 py-2 rounded-full border border-red-500/10">
-                          {isPaymentOverdue
+                          {paymentOverdue
                             ? "Mensalidade pendente. Procure seu professor para regularizar."
                             : !plan
                               ? "Seu perfil não possui um plano associado."

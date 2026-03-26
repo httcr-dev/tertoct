@@ -1,24 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import {
   collection,
-  doc,
   getDocs,
   onSnapshot,
   orderBy,
   query,
   where,
   Timestamp,
-  updateDoc,
-  setDoc,
-  serverTimestamp,
-  deleteDoc,
-  deleteField,
-  addDoc,
 } from "firebase/firestore";
 import { getFirestoreDb } from "@/lib/firebase";
-import type { Plan, StudentSummary, CheckIn } from "@/lib/types";
+import type { Plan, StudentSummary } from "@/lib/types";
 import { useAuth } from "../auth/AuthProvider";
 import { Home, List, Users, CheckCircle } from "lucide-react";
 import { OverviewTab } from "./coach/OverviewTab";
@@ -27,8 +20,21 @@ import { ProfessorsTab } from "./coach/ProfessorsTab";
 import { StudentsTab } from "./coach/StudentsTab";
 import { CheckinsTab } from "./coach/CheckinsTab";
 import { CheckinHistoryModal } from "./coach/CheckinHistoryModal";
+import {
+  createPlan,
+  updatePlan,
+  deletePlan as deletePlanService,
+  togglePlanActive,
+} from "@/services/planService";
+import {
+  assignPlan,
+  setPaymentDay,
+  togglePayment,
+  toggleUserActive,
+} from "@/services/userService";
+import { fetchCheckinsByUser } from "@/services/checkinService";
 
-
+type CoachTab = "overview" | "plans" | "professors" | "students" | "checkins";
 
 export function CoachDashboard() {
   const { profile, signOutUser } = useAuth();
@@ -36,8 +42,8 @@ export function CoachDashboard() {
 
   const [plans, setPlans] = useState<Plan[]>([]);
   const [students, setStudents] = useState<StudentSummary[]>([]);
-  const [selectedPlanId, setSelectedPlanId] = useState<string>("all");
-  const [paymentFilter, setPaymentFilter] = useState<string>("all");
+  const [selectedPlanId, setSelectedPlanId] = useState("all");
+  const [paymentFilter, setPaymentFilter] = useState("all");
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
   const [editingFields, setEditingFields] = useState<Partial<Plan>>({});
   const editPlanRef = useRef<HTMLDivElement>(null);
@@ -45,35 +51,16 @@ export function CoachDashboard() {
   const [selectedStudentForHistory, setSelectedStudentForHistory] =
     useState<StudentSummary | null>(null);
   const [checkinHistory, setCheckinHistory] = useState<Array<any>>([]);
-  const [selectedTab, setSelectedTab] = useState<
-    "overview" | "plans" | "professors" | "students" | "checkins"
-  >("overview");
+  const [selectedTab, setSelectedTab] = useState<CoachTab>("overview");
   const [professors, setProfessors] = useState<StudentSummary[]>([]);
   const [recentCheckins, setRecentCheckins] = useState<any[]>([]);
   const [selectedStudentIdForCheckins, setSelectedStudentIdForCheckins] =
-    useState<string>("all");
+    useState("all");
   const [checkinCounts, setCheckinCounts] = useState<Map<string, number>>(
     new Map(),
   );
 
-  // Helpers
-
-
-  const updateWeeklyCheckIns = (
-    studentsList: StudentSummary[],
-    counts: Map<string, number>,
-  ) => {
-    return studentsList.map((s) => {
-      const weeklyCheckIns = counts.get(s.id) ?? 0;
-      return {
-        ...s,
-        weeklyCheckIns,
-      };
-    });
-  };
-
-
-
+  // ── Real-time listeners ──────────────────────────────────────────────
   useEffect(() => {
     const plansRef = collection(db, "plans");
     const unsubPlans = onSnapshot(
@@ -93,12 +80,11 @@ export function CoachDashboard() {
         });
         setPlans(next);
       },
-      (error) => {
-        console.error("Error loading plans:", error);
-      },
+      (error) => console.error("Error loading plans:", error),
     );
 
     const usersRef = collection(db, "users");
+
     const unsubStudents = onSnapshot(
       query(usersRef, where("role", "==", "student")),
       (snap) => {
@@ -141,7 +127,7 @@ export function CoachDashboard() {
       },
     );
 
-    // Real-time listener for monthly check-ins (last 30 days)
+    // Monthly check-in counts (last 30 days)
     const checkInsRef = collection(db, "checkins");
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const unsubMonthly = onSnapshot(
@@ -153,9 +139,7 @@ export function CoachDashboard() {
         const counts = new Map<string, number>();
         snap.forEach((d) => {
           const uid = d.data().userId;
-          if (uid) {
-            counts.set(uid, (counts.get(uid) ?? 0) + 1);
-          }
+          if (uid) counts.set(uid, (counts.get(uid) ?? 0) + 1);
         });
         setCheckinCounts(counts);
       },
@@ -169,28 +153,31 @@ export function CoachDashboard() {
     };
   }, [db]);
 
-  // Derived lists with real-time check-in counts
-  const studentsWithCounts = useMemo(() => {
-    return students.map((s) => ({
-      ...s,
-      weeklyCheckIns: checkinCounts.get(s.id) ?? 0,
-    }));
-  }, [students, checkinCounts]);
+  // ── Derived data ─────────────────────────────────────────────────────
+  const studentsWithCounts = useMemo(
+    () =>
+      students.map((s) => ({
+        ...s,
+        weeklyCheckIns: checkinCounts.get(s.id) ?? 0,
+      })),
+    [students, checkinCounts],
+  );
 
-  const professorsWithCounts = useMemo(() => {
-    return professors.map((p) => ({
-      ...p,
-      weeklyCheckIns: checkinCounts.get(p.id) ?? 0,
-    }));
-  }, [professors, checkinCounts]);
+  const professorsWithCounts = useMemo(
+    () =>
+      professors.map((p) => ({
+        ...p,
+        weeklyCheckIns: checkinCounts.get(p.id) ?? 0,
+      })),
+    [professors, checkinCounts],
+  );
 
-  // load recent checkins for overview/chart
+  // Recent checkins for overview chart
   useEffect(() => {
     const loadRecent = async () => {
       try {
-        const daysBack = 14;
         const since = new Date();
-        since.setDate(since.getDate() - daysBack);
+        since.setDate(since.getDate() - 14);
         const checkInsRef = collection(db, "checkins");
         const q = query(
           checkInsRef,
@@ -201,43 +188,45 @@ export function CoachDashboard() {
         const list: any[] = [];
         snap.forEach((d) => list.push({ id: d.id, ...(d.data() as any) }));
         setRecentCheckins(list);
-      } catch (err) {
+      } catch {
         setRecentCheckins([]);
       }
     };
-
-    loadRecent().catch(() => {});
+    loadRecent();
   }, [db]);
 
-  const handleEditPlanClick = (plan: Plan) => {
-    setEditingPlan(plan);
-    setEditingFields({
-      name: plan.name,
-      price: plan.price,
-      classesPerWeek: plan.classesPerWeek,
-      description: plan.description,
-      active: plan.active,
-    });
+  // ── Plan handlers (delegated to service) ─────────────────────────────
+  const scrollToEditPanel = useCallback(() => {
     setTimeout(() => {
-      editPlanRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
+      editPlanRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 100);
-  };
+  }, []);
 
-  const handleCreatePlan = async () => {
-    // Generate a temporary ID for the UI
+  const handleEditPlanClick = useCallback(
+    (plan: Plan) => {
+      setEditingPlan(plan);
+      setEditingFields({
+        name: plan.name,
+        price: plan.price,
+        classesPerWeek: plan.classesPerWeek,
+        description: plan.description,
+        active: plan.active,
+      });
+      scrollToEditPanel();
+    },
+    [scrollToEditPanel],
+  );
+
+  const handleCreatePlan = useCallback(() => {
     const tempId = `new_plan_${Date.now()}`;
-    const newPlan: Plan = {
+    setEditingPlan({
       id: tempId,
       name: "",
       price: 0,
       classesPerWeek: 1,
       description: "",
       active: true,
-    };
-    setEditingPlan(newPlan);
+    });
     setEditingFields({
       name: "",
       price: 0,
@@ -245,19 +234,13 @@ export function CoachDashboard() {
       description: "",
       active: true,
     });
-    setTimeout(() => {
-      editPlanRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    }, 100);
-  };
+    scrollToEditPanel();
+  }, [scrollToEditPanel]);
 
-  const handleSaveEditPlan = async () => {
+  const handleSaveEditPlan = useCallback(async () => {
     if (!editingPlan) return;
     try {
       const isNew = editingPlan.id.startsWith("new_plan_");
-
       const payload = {
         name: editingFields.name || editingPlan.name || "Novo Plano",
         price: editingFields.price ?? editingPlan.price,
@@ -268,109 +251,99 @@ export function CoachDashboard() {
       };
 
       if (isNew) {
-        const plansRef = collection(db, "plans");
-        await addDoc(plansRef, {
-          ...payload,
-          createdAt: serverTimestamp(),
-        });
+        await createPlan(payload);
       } else {
-        const ref = doc(db, "plans", editingPlan.id);
-        await updateDoc(ref, payload);
+        await updatePlan(editingPlan.id, payload);
       }
-
       setEditingPlan(null);
       setEditingFields({});
     } catch (err) {
       console.error("Failed to save plan", err);
     }
-  };
+  }, [editingPlan, editingFields]);
 
-  const handleDeletePlan = async (plan: Plan) => {
-    if (
-      !window.confirm(
-        "Tem certeza que deseja deletar este plano? Esta ação é irreversível.",
+  const handleDeletePlan = useCallback(
+    async (plan: Plan) => {
+      if (
+        !window.confirm(
+          "Tem certeza que deseja deletar este plano? Esta ação é irreversível.",
+        )
       )
-    )
-      return;
-    try {
-      await deleteDoc(doc(db, "plans", plan.id));
-      if (editingPlan?.id === plan.id) {
-        setEditingPlan(null);
+        return;
+      try {
+        await deletePlanService(plan.id);
+        if (editingPlan?.id === plan.id) setEditingPlan(null);
+      } catch (err) {
+        console.error("Failed to delete plan", err);
       }
-    } catch (err) {
-      console.error("Failed to delete plan", err);
-    }
-  };
+    },
+    [editingPlan],
+  );
 
-  const toggleStudentActive = async (student: StudentSummary) => {
-    try {
-      const ref = doc(db, "users", student.id);
-      await updateDoc(ref, { active: !(student as any).active });
-      setStudents((prev) =>
-        prev.map((s) =>
-          s.id === student.id
-            ? {
-                ...s,
-                ...((s as any).active !== undefined
-                  ? { active: !(s as any).active }
-                  : {}),
-              }
-            : s,
-        ),
-      );
-    } catch (err) {
-      console.error("Failed to toggle student active", err);
-    }
-  };
+  const handleTogglePlanActive = useCallback(async (plan: Plan) => {
+    await togglePlanActive(plan);
+  }, []);
 
-  const viewCheckins = async (student: StudentSummary) => {
+  // ── Student handlers (delegated to service) ──────────────────────────
+  const handleAssignPlan = useCallback(
+    async (studentId: string, planId: string | null) => {
+      await assignPlan(studentId, planId);
+    },
+    [],
+  );
+
+  const handleSetPaymentDay = useCallback(
+    async (studentId: string, day: number | null) => {
+      await setPaymentDay(studentId, day);
+    },
+    [],
+  );
+
+  const handleTogglePayment = useCallback(
+    async (student: StudentSummary) => {
+      await togglePayment(student);
+    },
+    [],
+  );
+
+  const toggleStudentActive = useCallback(
+    async (student: StudentSummary) => {
+      try {
+        await toggleUserActive(student.id, student.active !== false);
+      } catch (err) {
+        console.error("Failed to toggle student active", err);
+      }
+    },
+    [],
+  );
+
+  // ── Check-in history modal ───────────────────────────────────────────
+  const viewCheckins = useCallback(async (student: StudentSummary) => {
     setSelectedStudentForHistory(student);
     setCheckinModalOpen(true);
     try {
-      const checkInsRef = collection(db, "checkins");
-      const q = query(
-        checkInsRef,
-        where("userId", "==", student.id),
-      );
-      const snap = await getDocs(q);
-      const history: Array<any> = [];
-      snap.forEach((d) => {
-        const data = d.data();
-        history.push({ id: d.id, ...data });
-      });
-      // Sort locally to avoid needing a composite index
-      history.sort((a, b) => {
-        const dateA = a.createdAt?.toDate?.()?.getTime() || a.createdAt?.seconds * 1000 || 0;
-        const dateB = b.createdAt?.toDate?.()?.getTime() || b.createdAt?.seconds * 1000 || 0;
-        return dateB - dateA;
-      });
+      const history = await fetchCheckinsByUser(student.id);
       setCheckinHistory(history);
     } catch (err) {
       console.error("Failed to fetch check-in history", err);
       setCheckinHistory([]);
     }
-  };
+  }, []);
 
-  const closeCheckinsModal = () => {
-        setCheckinModalOpen(false);
+  const closeCheckinsModal = useCallback(() => {
+    setCheckinModalOpen(false);
     setSelectedStudentForHistory(null);
     setCheckinHistory([]);
-  };
+  }, []);
 
-  // Consolidated into onSnapshot above
-  useEffect(() => {
-    // This effect is now redundant as onSnapshot handles real-time updates
-  }, [db]);
-
+  // ── Filtered students ────────────────────────────────────────────────
   const filteredStudents = useMemo(() => {
     let list = studentsWithCounts;
-    
-    // Plan Filter
+
     if (selectedPlanId !== "all") {
       list = list.filter((s) => s.planId === selectedPlanId);
     }
 
-    // Payment Filter
     if (paymentFilter !== "all") {
       const now = new Date();
       list = list.filter((s) => {
@@ -386,14 +359,13 @@ export function CoachDashboard() {
         }
 
         if (paymentFilter === "pending") return !isPaid;
-        
-        // Ativos vs Pagos logic
-        // Ativo: Paid but validUntil is in the current month (needs renewal)
-        // Pago: Paid and validUntil is in the next month (already renewed)
+
         if (isPaid) {
-          if (!s.paymentValidUntil) return paymentFilter === "active"; // Fallback: if just "paid" checkbox, assume active
+          if (!s.paymentValidUntil) return paymentFilter === "active";
           const validUntil = s.paymentValidUntil.toDate();
-          const isNextMonth = validUntil.getMonth() !== now.getMonth() || validUntil.getFullYear() !== now.getFullYear();
+          const isNextMonth =
+            validUntil.getMonth() !== now.getMonth() ||
+            validUntil.getFullYear() !== now.getFullYear();
           if (paymentFilter === "paid") return isNextMonth;
           if (paymentFilter === "active") return !isNextMonth;
         }
@@ -404,77 +376,10 @@ export function CoachDashboard() {
     return list;
   }, [studentsWithCounts, selectedPlanId, paymentFilter]);
 
-  const handleTogglePlanActive = async (plan: Plan) => {
-    const ref = doc(db, "plans", plan.id);
-    await updateDoc(ref, { active: !plan.active });
-  };
-
-  const handleAssignPlan = async (studentId: string, planId: string | null) => {
-    const ref = doc(db, "users", studentId);
-    await updateDoc(ref, {
-      planId: planId || deleteField(),
-    });
-  };
-
-  const handleSetPaymentDay = async (studentId: string, day: number | null) => {
-    const ref = doc(db, "users", studentId);
-    if (day === null) {
-      await updateDoc(ref, {
-        paymentDueDay: deleteField(),
-        monthlyPaymentPaid: deleteField(),
-      });
-    } else {
-      await updateDoc(ref, { paymentDueDay: day });
-    }
-  };
-
-  const handleTogglePayment = async (student: StudentSummary) => {
-    const ref = doc(db, "users", student.id);
-    const now = new Date();
-    
-    let isPaid = false;
-    if (student.paymentValidUntil) {
-      isPaid = now.getTime() <= student.paymentValidUntil.toDate().getTime();
-    } else {
-      isPaid = student.monthlyPaymentPaid || false;
-    }
-
-    if (isPaid) {
-      // If currently paid, unmark
-      await updateDoc(ref, {
-        monthlyPaymentPaid: false,
-        paymentValidUntil: deleteField(),
-      });
-    } else {
-      // If pending, mark as paid until the next due day
-      let targetMonth = now.getMonth() + 1;
-      let targetYear = now.getFullYear();
-      if (targetMonth > 11) {
-        targetMonth = 0; // January
-        targetYear += 1;
-      }
-      
-      const dueDay = student.paymentDueDay || 10;
-      const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
-      const day = Math.min(dueDay, lastDay);
-      // Valid until end of the due day in the target month (23:59:59)
-      const validUntil = new Date(targetYear, targetMonth, day, 23, 59, 59, 999);
-
-      await updateDoc(ref, {
-        monthlyPaymentPaid: true,
-        paymentValidUntil: Timestamp.fromDate(validUntil),
-      });
-    }
-  };
-
-  const handleNavigateToCoaches = () => {
-    // navigate to students section
-    setSelectedTab("students");
-  };
-
+  // ── Render ───────────────────────────────────────────────────────────
   return (
     <div className="flex min-h-screen bg-transparent text-zinc-50 selection:bg-amber-500/30">
-      {/* Sidebar - hidden on mobile */}
+      {/* Sidebar */}
       <aside className="w-64 flex-shrink-0 border-r border-zinc-800/40 bg-black/20 backdrop-blur-xl p-6 hidden md:flex flex-col">
         <div className="mb-10 px-2 mt-2">
           <div className="flex items-center gap-3">
@@ -489,68 +394,37 @@ export function CoachDashboard() {
           </div>
         </div>
         <nav className="flex flex-col gap-1.5 flex-1">
-          <button
-            onClick={() => setSelectedTab("overview")}
-            className={`flex items-center gap-3 w-full text-left rounded-lg px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer ${selectedTab === "overview" ? "bg-zinc-800/60 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"}`}
-          >
-            <Home className="h-[18px] w-[18px]" strokeWidth={2} />
-            Visão Geral
-          </button>
-          <button
-            onClick={() => setSelectedTab("plans")}
-            className={`flex items-center gap-3 w-full text-left rounded-lg px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer ${selectedTab === "plans" ? "bg-zinc-800/60 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"}`}
-          >
-            <List className="h-[18px] w-[18px]" strokeWidth={2} />
-            Planos
-          </button>
-          <button
-            onClick={() => setSelectedTab("professors")}
-            className={`flex items-center gap-3 w-full text-left rounded-lg px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer ${selectedTab === "professors" ? "bg-zinc-800/60 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"}`}
-          >
-            <Users className="h-[18px] w-[18px]" strokeWidth={2} />
-            Professores
-          </button>
-          <button
-            onClick={() => setSelectedTab("students")}
-            className={`flex items-center gap-3 w-full text-left rounded-lg px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer ${selectedTab === "students" ? "bg-zinc-800/60 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"}`}
-          >
-            <Users className="h-[18px] w-[18px]" strokeWidth={2} />
-            Alunos
-          </button>
-          <button
-            onClick={() => setSelectedTab("checkins")}
-            className={`flex items-center gap-3 w-full text-left rounded-lg px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer ${selectedTab === "checkins" ? "bg-zinc-800/60 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"}`}
-          >
-            <CheckCircle className="h-[18px] w-[18px]" strokeWidth={2} />
-            Check-Ins
-          </button>
+          {(
+            [
+              { tab: "overview", icon: Home, label: "Visão Geral" },
+              { tab: "plans", icon: List, label: "Planos" },
+              { tab: "professors", icon: Users, label: "Professores" },
+              { tab: "students", icon: Users, label: "Alunos" },
+              { tab: "checkins", icon: CheckCircle, label: "Check-Ins" },
+            ] as const
+          ).map(({ tab, icon: Icon, label }) => (
+            <button
+              key={tab}
+              onClick={() => setSelectedTab(tab)}
+              className={`flex items-center gap-3 w-full text-left rounded-lg px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer ${selectedTab === tab ? "bg-zinc-800/60 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"}`}
+            >
+              <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
+              {label}
+            </button>
+          ))}
         </nav>
       </aside>
 
       {/* Mobile bottom nav */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 flex md:hidden items-center justify-around border-t border-zinc-800/60 bg-black/90 backdrop-blur-xl px-2 py-2">
-        {[
-          {
-            tab: "overview" as const,
-            icon: <Home className="h-5 w-5" />,
-            label: "Início",
-          },
-          {
-            tab: "plans" as const,
-            icon: <List className="h-5 w-5" />,
-            label: "Planos",
-          },
-          {
-            tab: "students" as const,
-            icon: <Users className="h-5 w-5" />,
-            label: "Alunos",
-          },
-          {
-            tab: "checkins" as const,
-            icon: <CheckCircle className="h-5 w-5" />,
-            label: "Check-ins",
-          },
-        ].map(({ tab, icon, label }) => (
+        {(
+          [
+            { tab: "overview", icon: <Home className="h-5 w-5" />, label: "Início" },
+            { tab: "plans", icon: <List className="h-5 w-5" />, label: "Planos" },
+            { tab: "students", icon: <Users className="h-5 w-5" />, label: "Alunos" },
+            { tab: "checkins", icon: <CheckCircle className="h-5 w-5" />, label: "Check-ins" },
+          ] as const
+        ).map(({ tab, icon, label }) => (
           <button
             key={tab}
             onClick={() => setSelectedTab(tab)}
@@ -670,7 +544,6 @@ export function CoachDashboard() {
             history={checkinHistory}
             plans={plans}
           />
-
         </div>
       </main>
     </div>

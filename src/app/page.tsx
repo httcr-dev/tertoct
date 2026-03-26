@@ -31,14 +31,7 @@ export default function Home() {
   const [loadingLandingData, setLoadingLandingData] = useState(true);
 
   useEffect(() => {
-    console.log("🏠 Page.tsx - Auth state:", {
-      loading,
-      hasProfile: !!profile,
-      profileEmail: profile?.email,
-    });
-
     if (!loading && profile) {
-      console.log("🚀 Redirecting to dashboard...", profile.email);
       router.replace("/dashboard");
     }
   }, [loading, profile, router]);
@@ -93,8 +86,7 @@ export default function Home() {
       }
     };
 
-    load().catch((error) => {
-      console.error("Failed to load landing data", error);
+    load().catch(() => {
       setLoadingLandingData(false);
     });
   }, []);
@@ -123,6 +115,8 @@ export default function Home() {
               alt="TertoCT Boxe Background"
               fill
               priority
+              quality={100}
+              unoptimized
               className="object-cover object-top opacity-50 mix-blend-lighten"
             />
             {/* Gradients para escurecer as bordas e a base */}
@@ -200,7 +194,10 @@ export default function Home() {
             </section>
 
             {/* NOSSOS PLANOS */}
-            <PlansSection plans={plans} loadingLandingData={loadingLandingData} />
+            <PlansSection
+              plans={plans}
+              loadingLandingData={loadingLandingData}
+            />
 
             {/* NOSSA EQUIPE */}
             <CoachesSection coaches={coaches} />
@@ -217,7 +214,7 @@ export default function Home() {
                 METAS EM REALIDADE?
               </h2>
               <a
-                href="https://wa.me/5544999763984?text=Ol%C3%A1!%20Gostaria%20de%20agendar%20uma%20aula%20experimental%20de%20boxe."
+                href="https://wa.me/554499771761?text=Ol%C3%A1!%20Gostaria%20de%20agendar%20uma%20aula%20experimental%20de%20boxe."
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mt-10 cursor-pointer inline-block rounded-md bg-[#c29b62] px-10 py-4 text-sm font-bold uppercase tracking-wider text-black shadow-[0_0_20px_rgba(194,155,98,0.3)] transition hover:bg-[#d4b075] hover:-translate-y-1"

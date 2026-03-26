@@ -1,6 +1,7 @@
 "use client";
 
 import { StudentSummary, Plan } from "@/lib/types";
+import { toDate } from "@/lib/utils/date";
 
 interface CheckinHistoryModalProps {
   isOpen: boolean;
@@ -62,12 +63,7 @@ export function CheckinHistoryModal({
               </div>
             )}
             {history.map((c) => {
-              const date =
-                c.createdAt && c.createdAt.toDate
-                  ? c.createdAt.toDate()
-                  : c.createdAt
-                    ? new Date((c.createdAt.seconds || c.createdAt) * 1000)
-                    : null;
+              const date = toDate(c.createdAt);
               const planName = c.planId
                 ? (plans.find((p) => p.id === c.planId)?.name ?? "Plano")
                 : "Sem plano";

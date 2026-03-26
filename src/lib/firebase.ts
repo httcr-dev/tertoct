@@ -2,8 +2,6 @@ import { initializeApp, getApps, FirebaseApp } from "firebase/app";
 import {
   getAuth,
   GoogleAuthProvider,
-  signInWithRedirect,
-  getRedirectResult,
   setPersistence,
   browserLocalPersistence,
   type Auth,
@@ -32,6 +30,7 @@ export interface AppUserProfile {
   createdAt?: Date | null;
   paymentDueDay?: number | null;
   monthlyPaymentPaid?: boolean;
+  paymentValidUntil?: any | null;
 }
 
 let firebaseApp: FirebaseApp | undefined;
@@ -83,11 +82,6 @@ export function getFirestoreDb(): Firestore {
 
 export const googleProvider = new GoogleAuthProvider();
 
-// Add a function to check if the user is authenticated
-export function isAuthenticated(): boolean {
-  const auth = getFirebaseAuth();
-  return !!auth.currentUser;
-}
 
 export async function ensureUserDocument(user: User): Promise<AppUserProfile> {
   const db = getFirestoreDb();
@@ -116,8 +110,8 @@ export async function ensureUserDocument(user: User): Promise<AppUserProfile> {
     };
   }
 
-  const data = snap.data() as any;
-  const updates: any = {};
+  const data = snap.data();
+  const updates: Record<string, string> = {};
 
   // Sync name, email and photoURL if they are missing or different
   if (user.displayName && data.name !== user.displayName) {
@@ -149,5 +143,6 @@ export async function ensureUserDocument(user: User): Promise<AppUserProfile> {
     createdAt: data.createdAt?.toDate?.() ?? null,
     paymentDueDay: data.paymentDueDay ?? null,
     monthlyPaymentPaid: data.monthlyPaymentPaid ?? false,
+    paymentValidUntil: data.paymentValidUntil ?? null,
   };
 }

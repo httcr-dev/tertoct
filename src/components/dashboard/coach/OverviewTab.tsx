@@ -3,6 +3,7 @@
 import { Users, List, CheckCircle } from "lucide-react";
 import { BarChart } from "@/components/ui/BarChart";
 import { StudentSummary, Plan, CheckIn } from "@/lib/types";
+import { toDate } from "@/lib/utils/date";
 
 interface OverviewTabProps {
   students: StudentSummary[];
@@ -17,12 +18,7 @@ export function OverviewTab({
 }: OverviewTabProps) {
   const activePlansCount = plans.filter((p) => p.active).length;
   const recentCheckinsCount = recentCheckins.filter((c) => {
-    const d =
-      c.createdAt && c.createdAt.toDate
-        ? c.createdAt.toDate()
-        : c.createdAt
-          ? new Date((c.createdAt.seconds || c.createdAt) * 1000)
-          : null;
+    const d = toDate(c.createdAt) ?? c.createdAt;
     if (!d) return false;
     const days = (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24);
     return days <= 7;

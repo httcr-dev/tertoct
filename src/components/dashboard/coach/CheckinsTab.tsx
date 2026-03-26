@@ -2,6 +2,7 @@
 
 import { BarChart } from "@/components/ui/BarChart";
 import { StudentSummary, Plan, CheckIn } from "@/lib/types";
+import { toDate } from "@/lib/utils/date";
 
 interface CheckinsTabProps {
   recentCheckins: CheckIn[];
@@ -71,12 +72,7 @@ export function CheckinsTab({
           filteredCheckins.map((c) => {
             const student = studentsWithCounts.find((s) => s.id === c.userId);
             const plan = plans.find((p) => p.id === c.planId);
-            const date =
-              c.createdAt && c.createdAt.toDate
-                ? c.createdAt.toDate()
-                : c.createdAt
-                  ? new Date((c.createdAt.seconds || c.createdAt) * 1000)
-                  : null;
+            const date = toDate(c.createdAt) ?? c.createdAt;
 
             return (
               <div
