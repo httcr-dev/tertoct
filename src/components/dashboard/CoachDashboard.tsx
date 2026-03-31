@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import type { CheckIn, Plan, StudentSummary } from "@/lib/types";
 import { useAuth } from "../auth/AuthProvider";
-import { Home, List, Users, CheckCircle } from "lucide-react";
+import { Home, List, Users, CheckCircle, Bell } from "lucide-react";
 import { OverviewTab } from "./coach/OverviewTab";
 import { PlansTab } from "./coach/PlansTab";
 import { ProfessorsTab } from "./coach/ProfessorsTab";
 import { StudentsTab } from "./coach/StudentsTab";
 import { CheckinsTab } from "./coach/CheckinsTab";
+import { ExpirationsTab } from "./coach/ExpirationsTab";
 import { CheckinHistoryModal } from "./coach/CheckinHistoryModal";
 import {
   createPlan,
@@ -21,6 +22,7 @@ import {
   setPaymentDay,
   togglePayment,
   toggleUserActive,
+  updateUserPhone,
 } from "@/services/userService";
 import { fetchCheckinsByUser } from "@/services/checkinService";
 import {
@@ -31,7 +33,7 @@ import {
   listenStudents,
 } from "@/services/dashboardService";
 
-type CoachTab = "overview" | "plans" | "professors" | "students" | "checkins";
+type CoachTab = "overview" | "plans" | "professors" | "students" | "checkins" | "expirations";
 
 export function CoachDashboard() {
   const { profile, signOutUser } = useAuth();
@@ -312,6 +314,7 @@ export function CoachDashboard() {
               { tab: "professors", icon: Users, label: "Professores" },
               { tab: "students", icon: Users, label: "Alunos" },
               { tab: "checkins", icon: CheckCircle, label: "Check-Ins" },
+              { tab: "expirations", icon: Bell, label: "Vencimentos" },
             ] as const
           ).map(({ tab, icon: Icon, label }) => (
             <button
@@ -334,6 +337,7 @@ export function CoachDashboard() {
             { tab: "plans", icon: <List className="h-5 w-5" />, label: "Planos" },
             { tab: "students", icon: <Users className="h-5 w-5" />, label: "Alunos" },
             { tab: "checkins", icon: <CheckCircle className="h-5 w-5" />, label: "Check-ins" },
+            { tab: "expirations", icon: <Bell className="h-5 w-5" />, label: "Cobranças" },
           ] as const
         ).map(({ tab, icon, label }) => (
           <button
@@ -358,6 +362,7 @@ export function CoachDashboard() {
                 {selectedTab === "professors" && "Professores"}
                 {selectedTab === "students" && "Alunos"}
                 {selectedTab === "checkins" && "Check-Ins"}
+                {selectedTab === "expirations" && "Vencimentos"}
               </h1>
             </div>
             <div className="flex items-center gap-4">
@@ -445,6 +450,14 @@ export function CoachDashboard() {
               setSelectedStudentIdForCheckins={setSelectedStudentIdForCheckins}
               studentsWithCounts={studentsWithCounts}
               plans={plans}
+            />
+          )}
+
+          {selectedTab === "expirations" && (
+            <ExpirationsTab
+              students={students}
+              plans={plans}
+              updateUserPhone={updateUserPhone}
             />
           )}
 

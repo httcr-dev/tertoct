@@ -83,3 +83,14 @@ export async function toggleUserActive(
 ): Promise<void> {
   await updateDoc(userDoc(userId), { active: !currentlyActive });
 }
+
+export async function updateUserPhone(
+  userId: string,
+  phone: string | null,
+): Promise<void> {
+  if (!phone) {
+    await updateDoc(userDoc(userId), { phone: deleteField() });
+  } else {
+    await updateDoc(userDoc(userId), { phone });
+  }
+}

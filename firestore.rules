@@ -33,7 +33,8 @@ service cloud.firestore {
         'monthlyPaymentPaid',
         'paymentValidUntil',
         'bio',
-        'photoURL'
+        'photoURL',
+        'phone'
       ]);
     }
 

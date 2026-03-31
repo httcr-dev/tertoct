@@ -13,6 +13,7 @@ export interface AppUserProfile {
   createdAt?: Date | null;
   paymentDueDay?: number | null;
   monthlyPaymentPaid?: boolean;
+  phone?: string | null;
   paymentValidUntil?: any | null;
 }
 
@@ -34,6 +35,7 @@ export interface UserDocument {
   createdAt: Timestamp;
   paymentDueDay?: number | null;
   monthlyPaymentPaid?: boolean;
+  phone?: string | null;
   paymentValidUntil?: Timestamp | null;
 }
 
@@ -54,5 +56,6 @@ export interface StudentSummary {
   active?: boolean;
   paymentDueDay?: number | null;
   monthlyPaymentPaid?: boolean;
+  phone?: string | null;
   paymentValidUntil?: Timestamp | null;
 }
