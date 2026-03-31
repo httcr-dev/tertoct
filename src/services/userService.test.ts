@@ -41,6 +41,7 @@ describe("assignPlan", () => {
     expect(mockDoc).toHaveBeenCalledWith("mock-db", "users", "student-1");
     expect(mockUpdateDoc).toHaveBeenCalledWith("user-doc-ref", {
       planId: "plan-abc",
+      active: true,
     });
   });
 
@@ -49,6 +50,10 @@ describe("assignPlan", () => {
 
     expect(mockUpdateDoc).toHaveBeenCalledWith("user-doc-ref", {
       planId: "DELETE_FIELD_SENTINEL",
+      paymentValidUntil: "DELETE_FIELD_SENTINEL",
+      monthlyPaymentPaid: "DELETE_FIELD_SENTINEL",
+      paymentDueDay: "DELETE_FIELD_SENTINEL",
+      active: false,
     });
   });
 
@@ -57,6 +62,10 @@ describe("assignPlan", () => {
 
     expect(mockUpdateDoc).toHaveBeenCalledWith("user-doc-ref", {
       planId: "DELETE_FIELD_SENTINEL",
+      paymentValidUntil: "DELETE_FIELD_SENTINEL",
+      monthlyPaymentPaid: "DELETE_FIELD_SENTINEL",
+      paymentDueDay: "DELETE_FIELD_SENTINEL",
+      active: false,
     });
   });
 });

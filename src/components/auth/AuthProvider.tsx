@@ -46,7 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         await getRedirectResult(auth);
       } catch (error) {
-        console.error("Error handling redirect result:", error);
+        console.error("Error handling redirect result");
       }
 
       unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -57,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const ensured = await ensureUserDocument(user);
             setProfile(ensured);
           } catch (error) {
-            console.error("Failed to ensure user document:", error);
+            console.error("Failed to ensure user document");
             setProfile(null);
           }
         } else {
@@ -89,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           await signInWithRedirect(auth, googleProvider);
         } catch (redirectError) {
-          console.error("Redirect sign-in failed:", redirectError);
+          console.error("Redirect sign-in failed");
           throw redirectError;
         }
       } else if (

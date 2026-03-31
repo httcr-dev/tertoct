@@ -77,22 +77,12 @@ describe("getFirebaseAuth", () => {
   });
 
   it("handles persistence error gracefully", () => {
-    const consoleSpy = jest.spyOn(console, "error").mockImplementation();
     mockSetPersistence.mockRejectedValueOnce(new Error("persistence failed"));
 
-    firebase.getFirebaseAuth();
+    expect(() => firebase.getFirebaseAuth()).not.toThrow();
 
-    // The error is caught in a .catch, so we need to wait for the async
-    return new Promise<void>((resolve) => {
-      setTimeout(() => {
-        expect(consoleSpy).toHaveBeenCalledWith(
-          "Failed to set persistence:",
-          expect.any(Error),
-        );
-        consoleSpy.mockRestore();
-        resolve();
-      }, 10);
-    });
+    // The error is caught in a .catch; wait a tick to ensure it doesn't surface.
+    return new Promise<void>((resolve) => setTimeout(resolve, 0));
   });
 });
 
@@ -234,7 +224,6 @@ describe("ensureUserDocument", () => {
   });
 
   it("handles updateDoc failure gracefully", async () => {
-    const consoleSpy = jest.spyOn(console, "warn").mockImplementation();
     mockGetDoc.mockResolvedValue({
       exists: () => true,
       id: "user-123",
@@ -249,13 +238,8 @@ describe("ensureUserDocument", () => {
 
     const result = await firebase.ensureUserDocument(mockUser);
 
-    expect(consoleSpy).toHaveBeenCalledWith(
-      "Failed to sync user profile to Firestore (skipping):",
-      expect.any(Error),
-    );
     // Should still return the correct profile even if update failed
     expect(result.name).toBe("Test User");
-    consoleSpy.mockRestore();
   });
 
   it("handles user with null fields", async () => {

@@ -3,25 +3,16 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import {
-  collection,
-  getDocs,
-  query,
-  where,
-  type DocumentData,
-} from "firebase/firestore";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { getFirestoreDb } from "@/lib/firebase";
 import type { Plan } from "@/lib/types";
 import { PlansSection } from "@/components/landing/PlansSection";
 import { CoachesSection } from "@/components/landing/CoachesSection";
-
-interface CoachCardData {
-  id: string;
-  name: string | null;
-  bio?: string | null;
-  photoURL?: string | null;
-}
+import { FeedbackWall } from "@/components/landing/FeedbackWall";
+import {
+  fetchActiveCoaches,
+  fetchActivePlans,
+  type CoachCardData,
+} from "@/services/landingService";
 
 export default function Home() {
   const router = useRouter();
@@ -37,48 +28,12 @@ export default function Home() {
   }, [loading, profile, router]);
 
   useEffect(() => {
-    const db = getFirestoreDb();
-
     const load = async () => {
       try {
-        const plansQuery = query(
-          collection(db, "plans"),
-          where("active", "==", true),
-        );
-        const plansSnap = await getDocs(plansQuery);
-        const loadedPlans: Plan[] = [];
-        plansSnap.forEach((docSnap) => {
-          const data = docSnap.data() as DocumentData;
-          loadedPlans.push({
-            id: docSnap.id,
-            name: data.name as string,
-            price: data.price as number,
-            classesPerWeek: data.classesPerWeek as number,
-            description: (data.description as string | undefined) ?? undefined,
-            active: (data.active as boolean | undefined) ?? true,
-          });
-        });
-        loadedPlans.sort((a, b) => a.classesPerWeek - b.classesPerWeek);
-
-        const coachesQuery = query(
-          collection(db, "users"),
-          where("role", "in", ["coach", "admin"]),
-        );
-        const coachesSnap = await getDocs(coachesQuery);
-        const loadedCoaches: CoachCardData[] = [];
-        coachesSnap.forEach((docSnap) => {
-          const data = docSnap.data() as DocumentData;
-          if (data.active !== false) {
-            loadedCoaches.push({
-              id: docSnap.id,
-              name: (data.name as string | null | undefined) ?? null,
-              bio: (data.bio as string | null | undefined) ?? undefined,
-              photoURL:
-                (data.photoURL as string | null | undefined) ?? undefined,
-            });
-          }
-        });
-
+        const [loadedPlans, loadedCoaches] = await Promise.all([
+          fetchActivePlans(),
+          fetchActiveCoaches(),
+        ]);
         setPlans(loadedPlans);
         setCoaches(loadedCoaches);
       } finally {
@@ -201,6 +156,8 @@ export default function Home() {
 
             {/* NOSSA EQUIPE */}
             <CoachesSection coaches={coaches} />
+
+            <FeedbackWall />
 
             {/* CALL TO ACTION BOTTOM */}
             <section

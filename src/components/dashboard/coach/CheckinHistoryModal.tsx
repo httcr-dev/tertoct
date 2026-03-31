@@ -1,13 +1,13 @@
 "use client";
 
-import { StudentSummary, Plan } from "@/lib/types";
+import { StudentSummary, Plan, CheckIn } from "@/lib/types";
 import { toDate } from "@/lib/utils/date";
 
 interface CheckinHistoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   student: StudentSummary | null;
-  history: any[];
+  history: CheckIn[];
   plans: Plan[];
 }
 
@@ -78,7 +78,7 @@ export function CheckinHistoryModal({
                       {planName}
                     </p>
                     <p className="mt-0.5 text-xs text-zinc-400">
-                      {c.notes || "Check-in realizado"}
+                      Check-in realizado
                     </p>
                   </div>
                   <div className="text-right">

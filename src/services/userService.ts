@@ -1,24 +1,29 @@
 import {
-  doc,
   updateDoc,
   deleteField,
   Timestamp,
 } from "firebase/firestore";
-import { getFirestoreDb } from "@/lib/firebase";
 import type { StudentSummary } from "@/lib/types";
-
-const USERS_COLLECTION = "users";
-
-function userDocRef(userId: string) {
-  return doc(getFirestoreDb(), USERS_COLLECTION, userId);
-}
+import { userDoc } from "@/lib/firestore/refs";
 
 export async function assignPlan(
   studentId: string,
   planId: string | null,
 ): Promise<void> {
-  await updateDoc(userDocRef(studentId), {
-    planId: planId || deleteField(),
+  if (!planId) {
+    await updateDoc(userDoc(studentId), {
+      planId: deleteField(),
+      paymentValidUntil: deleteField(),
+      monthlyPaymentPaid: deleteField(),
+      paymentDueDay: deleteField(),
+      active: false,
+    });
+    return;
+  }
+
+  await updateDoc(userDoc(studentId), {
+    planId,
+    active: true,
   });
 }
 
@@ -27,17 +32,17 @@ export async function setPaymentDay(
   day: number | null,
 ): Promise<void> {
   if (day === null) {
-    await updateDoc(userDocRef(studentId), {
+    await updateDoc(userDoc(studentId), {
       paymentDueDay: deleteField(),
       monthlyPaymentPaid: deleteField(),
     });
   } else {
-    await updateDoc(userDocRef(studentId), { paymentDueDay: day });
+    await updateDoc(userDoc(studentId), { paymentDueDay: day });
   }
 }
 
 export async function togglePayment(student: StudentSummary): Promise<void> {
-  const ref = userDocRef(student.id);
+  const ref = userDoc(student.id);
   const now = new Date();
 
   let isPaid = false;
@@ -76,5 +81,5 @@ export async function toggleUserActive(
   userId: string,
   currentlyActive: boolean,
 ): Promise<void> {
-  await updateDoc(userDocRef(userId), { active: !currentlyActive });
+  await updateDoc(userDoc(userId), { active: !currentlyActive });
 }

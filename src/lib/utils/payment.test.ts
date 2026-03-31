@@ -61,7 +61,6 @@ describe("isPaymentOverdue", () => {
     });
 
     it("handles validUntil parsing error and falls through to fallback", () => {
-      const consoleSpy = jest.spyOn(console, "error").mockImplementation();
       const profile = makeProfile({
         paymentDueDay: 10,
         monthlyPaymentPaid: true,
@@ -71,11 +70,6 @@ describe("isPaymentOverdue", () => {
       });
       // Falls through to fallback — monthlyPaymentPaid is true, so not overdue
       expect(isPaymentOverdue(profile)).toBe(false);
-      expect(consoleSpy).toHaveBeenCalledWith(
-        "Error parsing validUntil:",
-        expect.any(Error),
-      );
-      consoleSpy.mockRestore();
     });
   });
 

@@ -1,17 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
-import {
-  collection,
-  getDocs,
-  onSnapshot,
-  orderBy,
-  query,
-  where,
-  Timestamp,
-} from "firebase/firestore";
-import { getFirestoreDb } from "@/lib/firebase";
-import type { Plan, StudentSummary } from "@/lib/types";
+import type { CheckIn, Plan, StudentSummary } from "@/lib/types";
 import { useAuth } from "../auth/AuthProvider";
 import { Home, List, Users, CheckCircle } from "lucide-react";
 import { OverviewTab } from "./coach/OverviewTab";
@@ -33,12 +23,18 @@ import {
   toggleUserActive,
 } from "@/services/userService";
 import { fetchCheckinsByUser } from "@/services/checkinService";
+import {
+  fetchRecentCheckinsSince,
+  listenCheckinCountsSince,
+  listenCoaches,
+  listenPlans,
+  listenStudents,
+} from "@/services/dashboardService";
 
 type CoachTab = "overview" | "plans" | "professors" | "students" | "checkins";
 
 export function CoachDashboard() {
   const { profile, signOutUser } = useAuth();
-  const db = getFirestoreDb();
 
   const [plans, setPlans] = useState<Plan[]>([]);
   const [students, setStudents] = useState<StudentSummary[]>([]);
@@ -50,10 +46,10 @@ export function CoachDashboard() {
   const [checkinModalOpen, setCheckinModalOpen] = useState(false);
   const [selectedStudentForHistory, setSelectedStudentForHistory] =
     useState<StudentSummary | null>(null);
-  const [checkinHistory, setCheckinHistory] = useState<Array<any>>([]);
+  const [checkinHistory, setCheckinHistory] = useState<CheckIn[]>([]);
   const [selectedTab, setSelectedTab] = useState<CoachTab>("overview");
   const [professors, setProfessors] = useState<StudentSummary[]>([]);
-  const [recentCheckins, setRecentCheckins] = useState<any[]>([]);
+  const [recentCheckins, setRecentCheckins] = useState<CheckIn[]>([]);
   const [selectedStudentIdForCheckins, setSelectedStudentIdForCheckins] =
     useState("all");
   const [checkinCounts, setCheckinCounts] = useState<Map<string, number>>(
@@ -62,88 +58,12 @@ export function CoachDashboard() {
 
   // ── Real-time listeners ──────────────────────────────────────────────
   useEffect(() => {
-    const plansRef = collection(db, "plans");
-    const unsubPlans = onSnapshot(
-      query(plansRef, orderBy("name", "asc")),
-      (snap) => {
-        const next: Plan[] = [];
-        snap.forEach((docSnap) => {
-          const data = docSnap.data();
-          next.push({
-            id: docSnap.id,
-            name: data.name,
-            price: data.price,
-            classesPerWeek: data.classesPerWeek,
-            description: data.description,
-            active: data.active ?? true,
-          });
-        });
-        setPlans(next);
-      },
-      (error) => console.error("Error loading plans:", error),
-    );
+    const unsubPlans = listenPlans(setPlans);
+    const unsubStudents = listenStudents(setStudents);
+    const unsubProfessors = listenCoaches(setProfessors);
 
-    const usersRef = collection(db, "users");
-
-    const unsubStudents = onSnapshot(
-      query(usersRef, where("role", "==", "student")),
-      (snap) => {
-        const next: StudentSummary[] = [];
-        snap.forEach((docSnap) => {
-          const data = docSnap.data();
-          next.push({
-            id: docSnap.id,
-            name: data.name ?? null,
-            email: data.email ?? null,
-            photoURL: data.photoURL ?? null,
-            planId: data.planId ?? null,
-            weeklyCheckIns: 0,
-            paymentDueDay: data.paymentDueDay ?? null,
-            monthlyPaymentPaid: data.monthlyPaymentPaid ?? false,
-            paymentValidUntil: data.paymentValidUntil ?? null,
-            ...(data.active !== undefined ? { active: !!data.active } : {}),
-          });
-        });
-        setStudents(next);
-      },
-    );
-
-    const unsubProfessors = onSnapshot(
-      query(usersRef, where("role", "==", "coach")),
-      (snap) => {
-        const next: StudentSummary[] = [];
-        snap.forEach((docSnap) => {
-          const data = docSnap.data();
-          next.push({
-            id: docSnap.id,
-            name: data.name ?? null,
-            email: data.email ?? null,
-            photoURL: data.photoURL ?? null,
-            weeklyCheckIns: 0,
-            ...(data.active !== undefined ? { active: !!data.active } : {}),
-          });
-        });
-        setProfessors(next);
-      },
-    );
-
-    // Monthly check-in counts (last 30 days)
-    const checkInsRef = collection(db, "checkins");
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const unsubMonthly = onSnapshot(
-      query(
-        checkInsRef,
-        where("createdAt", ">=", Timestamp.fromDate(thirtyDaysAgo)),
-      ),
-      (snap) => {
-        const counts = new Map<string, number>();
-        snap.forEach((d) => {
-          const uid = d.data().userId;
-          if (uid) counts.set(uid, (counts.get(uid) ?? 0) + 1);
-        });
-        setCheckinCounts(counts);
-      },
-    );
+    const unsubMonthly = listenCheckinCountsSince(thirtyDaysAgo, setCheckinCounts);
 
     return () => {
       unsubPlans();
@@ -151,7 +71,7 @@ export function CoachDashboard() {
       unsubProfessors();
       unsubMonthly();
     };
-  }, [db]);
+  }, []);
 
   // ── Derived data ─────────────────────────────────────────────────────
   const studentsWithCounts = useMemo(
@@ -178,22 +98,13 @@ export function CoachDashboard() {
       try {
         const since = new Date();
         since.setDate(since.getDate() - 14);
-        const checkInsRef = collection(db, "checkins");
-        const q = query(
-          checkInsRef,
-          where("createdAt", ">=", Timestamp.fromDate(since)),
-          orderBy("createdAt", "desc"),
-        );
-        const snap = await getDocs(q);
-        const list: any[] = [];
-        snap.forEach((d) => list.push({ id: d.id, ...(d.data() as any) }));
-        setRecentCheckins(list);
+        setRecentCheckins(await fetchRecentCheckinsSince(since));
       } catch {
         setRecentCheckins([]);
       }
     };
     loadRecent();
-  }, [db]);
+  }, []);
 
   // ── Plan handlers (delegated to service) ─────────────────────────────
   const scrollToEditPanel = useCallback(() => {
@@ -258,7 +169,7 @@ export function CoachDashboard() {
       setEditingPlan(null);
       setEditingFields({});
     } catch (err) {
-      console.error("Failed to save plan", err);
+      console.error("Failed to save plan");
     }
   }, [editingPlan, editingFields]);
 
@@ -274,7 +185,7 @@ export function CoachDashboard() {
         await deletePlanService(plan.id);
         if (editingPlan?.id === plan.id) setEditingPlan(null);
       } catch (err) {
-        console.error("Failed to delete plan", err);
+        console.error("Failed to delete plan");
       }
     },
     [editingPlan],
@@ -311,7 +222,7 @@ export function CoachDashboard() {
       try {
         await toggleUserActive(student.id, student.active !== false);
       } catch (err) {
-        console.error("Failed to toggle student active", err);
+        console.error("Failed to toggle student active");
       }
     },
     [],
@@ -322,10 +233,10 @@ export function CoachDashboard() {
     setSelectedStudentForHistory(student);
     setCheckinModalOpen(true);
     try {
-      const history = await fetchCheckinsByUser(student.id);
+      const history = await fetchCheckinsByUser(student.id, { lastDays: 15 });
       setCheckinHistory(history);
     } catch (err) {
-      console.error("Failed to fetch check-in history", err);
+      console.error("Failed to fetch check-in history");
       setCheckinHistory([]);
     }
   }, []);

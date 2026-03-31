@@ -1,31 +1,26 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  Timestamp,
-  where,
-  onSnapshot,
-  type DocumentData,
-} from "firebase/firestore";
-import { getFirestoreDb } from "@/lib/firebase";
 import type { Plan, CheckIn } from "@/lib/types";
 import { useAuth } from "../auth/AuthProvider";
-import { Home, List, Users, CheckCircle, LogOut } from "lucide-react";
+import { Home, List, Users, CheckCircle, LogOut, MessageSquare, Trash2 } from "lucide-react";
 import { BarChart } from "@/components/ui/BarChart";
 import { isPaymentOverdue } from "@/lib/utils/payment";
 import { startOfWeek } from "@/lib/utils/date";
-import { createCheckIn } from "@/services/checkinService";
+import { createCheckIn, listenCheckinsByUser } from "@/services/checkinService";
+import { fetchActiveCoaches, fetchActivePlans } from "@/services/landingService";
+import { getPlanById } from "@/services/plansQueryService";
+import {
+  createFeedback,
+  deleteFeedback,
+  listenMyFeedbacks,
+  type Feedback,
+} from "@/services/feedbackService";
 
-type StudentTab = "overview" | "checkin" | "plans" | "professors";
+type StudentTab = "overview" | "checkin" | "plans" | "professors" | "feedback";
 
 export function StudentDashboard() {
   const { profile, signOutUser } = useAuth();
-  const db = getFirestoreDb();
 
   const [plan, setPlan] = useState<Plan | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -34,10 +29,13 @@ export function StudentDashboard() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [selectedTab, setSelectedTab] = useState<StudentTab>("overview");
+  const [feedbackText, setFeedbackText] = useState("");
+  const [myFeedbacks, setMyFeedbacks] = useState<Feedback[]>([]);
 
   // ── Data loading ─────────────────────────────────────────────────────
   useEffect(() => {
     let unsubCheckins: (() => void) | undefined;
+    let unsubFeedbacks: (() => void) | undefined;
 
     const load = async () => {
       if (!profile) return;
@@ -48,66 +46,22 @@ export function StudentDashboard() {
       if (profile.planId) {
         tasks.push(
           (async () => {
-            const ref = doc(db, "plans", profile.planId as string);
-            const snap = await getDoc(ref);
-            if (snap.exists()) {
-              const data = snap.data() as DocumentData;
-              setPlan({
-                id: snap.id,
-                name: data.name,
-                price: data.price,
-                classesPerWeek: data.classesPerWeek,
-                description: data.description,
-                active: data.active ?? true,
-              });
-            }
+            const current = await getPlanById(profile.planId as string);
+            setPlan(current);
           })(),
         );
       }
 
       // Real-time check-ins listener
-      const checkInsRef = collection(db, "checkins");
-      const qCheckins = query(checkInsRef, where("userId", "==", profile.id));
+      unsubCheckins = listenCheckinsByUser(profile.id, setCheckIns);
 
-      unsubCheckins = onSnapshot(
-        qCheckins,
-        (snap) => {
-          const next: CheckIn[] = [];
-          snap.forEach((docSnap) => {
-            const data = docSnap.data() as DocumentData;
-            const createdAt = data.createdAt as Timestamp | undefined;
-            next.push({
-              id: docSnap.id,
-              userId: data.userId,
-              planId: data.planId,
-              createdAt: createdAt?.toDate() ?? new Date(),
-            });
-          });
-          next.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-          setCheckIns(next);
-        },
-        (error) => console.error("Error fetching checkins:", error),
-      );
+      // My feedbacks listener
+      unsubFeedbacks = listenMyFeedbacks(profile.id, setMyFeedbacks);
 
       // Fetch all active plans
       tasks.push(
         (async () => {
-          const plansRef = collection(db, "plans");
-          const snap = await getDocs(query(plansRef));
-          const next: Plan[] = [];
-          snap.forEach((docSnap) => {
-            const data = docSnap.data();
-            if (data.active !== false) {
-              next.push({
-                id: docSnap.id,
-                name: data.name,
-                price: data.price,
-                classesPerWeek: data.classesPerWeek,
-                description: data.description,
-                active: true,
-              });
-            }
-          });
+          const next = await fetchActivePlans();
           setPlans(next.sort((a, b) => a.name.localeCompare(b.name)));
         })(),
       );
@@ -115,18 +69,8 @@ export function StudentDashboard() {
       // Fetch all active coaches
       tasks.push(
         (async () => {
-          const usersRef = collection(db, "users");
-          const snap = await getDocs(
-            query(usersRef, where("role", "==", "coach")),
-          );
-          const next: any[] = [];
-          snap.forEach((docSnap) => {
-            const data = docSnap.data();
-            if (data.active !== false) {
-              next.push({ id: docSnap.id, ...data });
-            }
-          });
-          setProfessors(next);
+          const coaches = await fetchActiveCoaches();
+          setProfessors(coaches);
         })(),
       );
 
@@ -138,8 +82,11 @@ export function StudentDashboard() {
     };
 
     load();
-    return () => unsubCheckins?.();
-  }, [db, profile]);
+    return () => {
+      unsubCheckins?.();
+      unsubFeedbacks?.();
+    };
+  }, [profile]);
 
   // ── Derived state ────────────────────────────────────────────────────
   const currentWeekInfo = useMemo(() => {
@@ -157,6 +104,8 @@ export function StudentDashboard() {
   }, [checkIns, plan, profile]);
 
   const paymentOverdue = useMemo(() => isPaymentOverdue(profile), [profile]);
+
+  const hasActivePlan = !!(plan && plan.active);
 
   const canCheckIn = !!(
     plan &&
@@ -215,6 +164,7 @@ export function StudentDashboard() {
               { tab: "checkin", icon: CheckCircle, label: "Check-in" },
               { tab: "plans", icon: List, label: "Planos" },
               { tab: "professors", icon: Users, label: "Professores" },
+              { tab: "feedback", icon: MessageSquare, label: "Feedback" },
             ] as const
           ).map(({ tab, icon: Icon, label }) => (
             <button
@@ -241,6 +191,7 @@ export function StudentDashboard() {
             { tab: "checkin" as const, icon: <CheckCircle className="h-5 w-5" />, label: "Check-in" },
             { tab: "plans" as const, icon: <List className="h-5 w-5" />, label: "Planos" },
             { tab: "professors" as const, icon: <Users className="h-5 w-5" />, label: "Profs" },
+            { tab: "feedback" as const, icon: <MessageSquare className="h-5 w-5" />, label: "Feedback" },
           ]
         ).map(({ tab, icon, label }) => (
           <button
@@ -264,6 +215,7 @@ export function StudentDashboard() {
                 {selectedTab === "checkin" && "Check-in semanal"}
                 {selectedTab === "plans" && "Planos disponíveis"}
                 {selectedTab === "professors" && "Nossos professores"}
+                {selectedTab === "feedback" && "Seu feedback"}
               </p>
               <h1 className="text-xl font-bold text-zinc-50 flex items-center gap-3">
                 {profile?.photoURL && (
@@ -290,6 +242,21 @@ export function StudentDashboard() {
 
           {selectedTab === "overview" && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              {!hasActivePlan && (
+                <div className="rounded-2xl border border-zinc-700/40 bg-zinc-900/40 p-4 flex items-center gap-4 backdrop-blur-sm">
+                  <div className="h-10 w-10 rounded-xl bg-zinc-800/60 text-zinc-300 flex items-center justify-center shrink-0">
+                    <span className="text-lg font-bold">i</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-zinc-200">
+                      Perfil inativo (sem plano ativo)
+                    </p>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      Você ainda não tem um plano ativo associado. Fale com seu professor para ativar seu plano e liberar o check-in.
+                    </p>
+                  </div>
+                </div>
+              )}
               {/* Payment Overdue Banner */}
               {paymentOverdue && (
                 <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 flex items-center gap-4 backdrop-blur-sm">
@@ -592,6 +559,99 @@ export function StudentDashboard() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {selectedTab === "feedback" && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              {!hasActivePlan ? (
+                <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/30 p-6">
+                  <p className="text-sm font-semibold text-zinc-200">
+                    Feedback disponível apenas com plano ativo.
+                  </p>
+                  <p className="mt-2 text-xs text-zinc-400">
+                    Assim que seu plano estiver ativo, você poderá enviar mensagens curtas para aparecerem no mural público.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="rounded-3xl border border-zinc-800/60 bg-zinc-900/30 p-6 backdrop-blur-sm">
+                    <p className="text-sm font-semibold text-zinc-100">
+                      Enviar feedback (até 64 caracteres)
+                    </p>
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+                      <input
+                        value={feedbackText}
+                        onChange={(e) => setFeedbackText(e.target.value.slice(0, 64))}
+                        maxLength={64}
+                        placeholder="Ex: Aula incrível hoje!"
+                        className="w-full rounded-xl border border-zinc-800 bg-black/30 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-amber-500/40"
+                      />
+                      <button
+                        onClick={async () => {
+                          if (!profile) return;
+                          const msg = feedbackText.trim().slice(0, 64);
+                          if (!msg) return;
+                          await createFeedback({
+                            userId: profile.id,
+                            userName: profile.name ?? null,
+                            message: msg,
+                          });
+                          setFeedbackText("");
+                        }}
+                        className="rounded-xl bg-amber-500 px-5 py-3 text-sm font-bold text-black hover:bg-amber-400 transition cursor-pointer"
+                      >
+                        Enviar
+                      </button>
+                    </div>
+                    <p className="mt-2 text-[11px] text-zinc-500">
+                      {feedbackText.trim().length}/64
+                    </p>
+                  </div>
+
+                  <div className="rounded-3xl border border-zinc-800/60 bg-zinc-900/20 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-zinc-800/60">
+                      <p className="text-sm font-semibold text-zinc-100">
+                        Seus feedbacks
+                      </p>
+                      <p className="text-xs text-zinc-500 mt-1">
+                        Você pode apagar apenas os seus.
+                      </p>
+                    </div>
+                    <div className="divide-y divide-zinc-800/40">
+                      {myFeedbacks.length === 0 ? (
+                        <div className="px-6 py-10 text-center">
+                          <p className="text-sm text-zinc-500">
+                            Nenhum feedback enviado ainda.
+                          </p>
+                        </div>
+                      ) : (
+                        myFeedbacks.map((f) => (
+                          <div
+                            key={f.id}
+                            className="px-6 py-4 flex items-center justify-between gap-4"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-sm text-zinc-100 break-words">
+                                {f.message}
+                              </p>
+                            </div>
+                            <button
+                              onClick={async () => {
+                                await deleteFeedback(f.id);
+                              }}
+                              className="shrink-0 inline-flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-300 hover:text-zinc-100 hover:border-amber-500/20 transition cursor-pointer"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              Apagar
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

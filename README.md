@@ -15,7 +15,7 @@ Tertoct Check-in SaaS is a **Next.js + Firebase** web application to manage boxi
 npm install
 ```
 
-2. Configure Firebase environment variables in a `.env.local` file:
+2. Configure Firebase environment variables in a `.env.local` file (you can start from `.env.example`):
 
 ```bash
 NEXT_PUBLIC_FIREBASE_API_KEY=...

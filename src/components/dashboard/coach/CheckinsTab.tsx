@@ -3,6 +3,7 @@
 import { BarChart } from "@/components/ui/BarChart";
 import { StudentSummary, Plan, CheckIn } from "@/lib/types";
 import { toDate } from "@/lib/utils/date";
+import { useMemo, useState } from "react";
 
 interface CheckinsTabProps {
   recentCheckins: CheckIn[];
@@ -19,11 +20,37 @@ export function CheckinsTab({
   studentsWithCounts,
   plans,
 }: CheckinsTabProps) {
-  const filteredCheckins = recentCheckins.filter(
-    (c) =>
-      selectedStudentIdForCheckins === "all" ||
-      c.userId === selectedStudentIdForCheckins,
-  );
+  const [selectedPlanId, setSelectedPlanId] = useState<string>("all");
+  const [onlyToday, setOnlyToday] = useState<boolean>(true);
+
+  const filteredCheckins = useMemo(() => {
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = today.getMonth();
+    const d = today.getDate();
+
+    return recentCheckins.filter((c) => {
+      if (
+        selectedStudentIdForCheckins !== "all" &&
+        c.userId !== selectedStudentIdForCheckins
+      ) {
+        return false;
+      }
+      if (selectedPlanId !== "all" && c.planId !== selectedPlanId) {
+        return false;
+      }
+      if (onlyToday) {
+        const date = toDate(c.createdAt) ?? c.createdAt;
+        if (!date) return false;
+        return (
+          date.getFullYear() === y &&
+          date.getMonth() === m &&
+          date.getDate() === d
+        );
+      }
+      return true;
+    });
+  }, [recentCheckins, selectedStudentIdForCheckins, selectedPlanId, onlyToday]);
 
   return (
     <section className="space-y-6">
@@ -36,18 +63,41 @@ export function CheckinsTab({
             Acompanhe os check-ins recentes filtrados por aluno.
           </p>
         </div>
-        <select
-          className="cursor-pointer rounded-lg border border-zinc-800 bg-zinc-900/60 px-4 py-2.5 text-sm text-zinc-200 transition-colors focus:border-amber-500/50 focus:outline-none backdrop-blur-md"
-          value={selectedStudentIdForCheckins}
-          onChange={(e) => setSelectedStudentIdForCheckins(e.target.value)}
-        >
-          <option value="all">Todos os Alunos</option>
-          {studentsWithCounts.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name || s.email}
-            </option>
-          ))}
-        </select>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <label className="flex items-center gap-2 text-xs text-zinc-400 select-none">
+            <input
+              type="checkbox"
+              checked={onlyToday}
+              onChange={(e) => setOnlyToday(e.target.checked)}
+              className="h-4 w-4 rounded border-zinc-700 bg-zinc-900 text-amber-500 focus:ring-0"
+            />
+            Somente hoje
+          </label>
+          <select
+            className="cursor-pointer rounded-lg border border-zinc-800 bg-zinc-900/60 px-4 py-2.5 text-sm text-zinc-200 transition-colors focus:border-amber-500/50 focus:outline-none backdrop-blur-md"
+            value={selectedPlanId}
+            onChange={(e) => setSelectedPlanId(e.target.value)}
+          >
+            <option value="all">Todos os Planos</option>
+            {plans.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          <select
+            className="cursor-pointer rounded-lg border border-zinc-800 bg-zinc-900/60 px-4 py-2.5 text-sm text-zinc-200 transition-colors focus:border-amber-500/50 focus:outline-none backdrop-blur-md"
+            value={selectedStudentIdForCheckins}
+            onChange={(e) => setSelectedStudentIdForCheckins(e.target.value)}
+          >
+            <option value="all">Todos os Alunos</option>
+            {studentsWithCounts.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name || s.email}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* User-specific activity chart */}

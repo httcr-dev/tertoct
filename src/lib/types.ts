@@ -1,5 +1,20 @@
 import type { Timestamp } from "firebase/firestore";
-import type { AppUserRole } from "./firebase";
+
+export type AppUserRole = "admin" | "coach" | "student";
+
+export interface AppUserProfile {
+  id: string;
+  name: string | null;
+  email: string | null;
+  photoURL?: string | null;
+  role: AppUserRole;
+  planId?: string | null;
+  active: boolean;
+  createdAt?: Date | null;
+  paymentDueDay?: number | null;
+  monthlyPaymentPaid?: boolean;
+  paymentValidUntil?: any | null;
+}
 
 export interface Plan {
   id: string;
