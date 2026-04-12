@@ -46,6 +46,7 @@ export function StudentsTab({
               onChange={(e) => setSelectedPlanId(e.target.value)}
             >
               <option value="all">Todos os Planos</option>
+              <option value="none">Sem Plano</option>
               {plans.map((plan) => (
                 <option key={plan.id} value={plan.id}>
                   {plan.name}

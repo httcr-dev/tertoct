@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { Plan, CheckIn } from "@/lib/types";
 import { useAuth } from "../auth/AuthProvider";
 import { Home, List, Users, CheckCircle, LogOut, MessageSquare, Trash2 } from "lucide-react";
 import { BarChart } from "@/components/ui/BarChart";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import { isPaymentOverdue } from "@/lib/utils/payment";
 import { startOfWeek } from "@/lib/utils/date";
 import { createCheckIn, listenCheckinsByUser } from "@/services/checkinService";
-import { fetchActiveCoaches, fetchActivePlans } from "@/services/landingService";
+import { fetchActivePlans } from "@/services/landingService";
 import { getPlanById } from "@/services/plansQueryService";
 import {
   createFeedback,
@@ -17,20 +19,34 @@ import {
   type Feedback,
 } from "@/services/feedbackService";
 
-type StudentTab = "overview" | "checkin" | "plans" | "professors" | "feedback";
+type StudentTab = "overview" | "checkin" | "plans" | "feedback";
+type ActionStatus = "idle" | "loading" | "success" | "error";
 
 export function StudentDashboard() {
   const { profile, signOutUser } = useAuth();
 
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const validStudentTabs: StudentTab[] = ["overview", "checkin", "plans", "feedback"];
+  const initialStudentTab = searchParams.get("tab") as StudentTab | null;
+
   const [plan, setPlan] = useState<Plan | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
-  const [professors, setProfessors] = useState<any[]>([]);
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [selectedTab, setSelectedTab] = useState<StudentTab>("overview");
+  const [checkInStatus, setCheckInStatus] = useState<ActionStatus>("idle");
+  const [selectedTab, setSelectedTab] = useState<StudentTab>(
+    initialStudentTab && validStudentTabs.includes(initialStudentTab) ? initialStudentTab : "overview",
+  );
   const [feedbackText, setFeedbackText] = useState("");
+  const [feedbackStatus, setFeedbackStatus] = useState<ActionStatus>("idle");
   const [myFeedbacks, setMyFeedbacks] = useState<Feedback[]>([]);
+
+  const handleTabChange = useCallback((tab: StudentTab) => {
+    setSelectedTab(tab);
+    router.replace(`?tab=${tab}`, { scroll: false });
+  }, [router]);
+
 
   // ── Data loading ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -63,14 +79,6 @@ export function StudentDashboard() {
         (async () => {
           const next = await fetchActivePlans();
           setPlans(next.sort((a, b) => a.name.localeCompare(b.name)));
-        })(),
-      );
-
-      // Fetch all active coaches
-      tasks.push(
-        (async () => {
-          const coaches = await fetchActiveCoaches();
-          setProfessors(coaches);
         })(),
       );
 
@@ -117,17 +125,40 @@ export function StudentDashboard() {
 
   // ── Check-in handler ─────────────────────────────────────────────────
   const handleCheckIn = useCallback(async () => {
-    if (!profile || !plan || !canCheckIn || creating) return;
+    if (!profile || !plan || !canCheckIn || checkInStatus === "loading") return;
 
-    setCreating(true);
+    setCheckInStatus("loading");
     try {
       await createCheckIn(profile.id, plan.id);
-      // Brief delay for visual feedback
-      await new Promise((resolve) => setTimeout(resolve, 800));
-    } finally {
-      setCreating(false);
+      setCheckInStatus("success");
+      setTimeout(() => setCheckInStatus("idle"), 2600);
+    } catch {
+      setCheckInStatus("error");
+      setTimeout(() => setCheckInStatus("idle"), 2600);
     }
-  }, [profile, plan, canCheckIn, creating]);
+  }, [profile, plan, canCheckIn, checkInStatus]);
+
+  // ── Feedback handler ───────────────────────────────────────────────
+  const handleSendFeedback = useCallback(async () => {
+    if (!profile || feedbackStatus === "loading") return;
+    const msg = feedbackText.trim().slice(0, 64);
+    if (!msg) return;
+
+    setFeedbackStatus("loading");
+    try {
+      await createFeedback({
+        userId: profile.id,
+        userName: profile.name ?? null,
+        message: msg,
+      });
+      setFeedbackText("");
+      setFeedbackStatus("success");
+      setTimeout(() => setFeedbackStatus("idle"), 2600);
+    } catch {
+      setFeedbackStatus("error");
+      setTimeout(() => setFeedbackStatus("idle"), 2600);
+    }
+  }, [profile, feedbackText, feedbackStatus]);
 
   // ── Loading state ────────────────────────────────────────────────────
   if (loading) {
@@ -163,13 +194,12 @@ export function StudentDashboard() {
               { tab: "overview", icon: Home, label: "Início" },
               { tab: "checkin", icon: CheckCircle, label: "Check-in" },
               { tab: "plans", icon: List, label: "Planos" },
-              { tab: "professors", icon: Users, label: "Professores" },
               { tab: "feedback", icon: MessageSquare, label: "Feedback" },
             ] as const
           ).map(({ tab, icon: Icon, label }) => (
             <button
               key={tab}
-              onClick={() => setSelectedTab(tab)}
+              onClick={() => handleTabChange(tab)}
               className={`flex items-center gap-3 w-full text-left rounded-lg px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer ${
                 selectedTab === tab
                   ? "bg-zinc-800/60 text-zinc-100"
@@ -190,13 +220,12 @@ export function StudentDashboard() {
             { tab: "overview" as const, icon: <Home className="h-5 w-5" />, label: "Início" },
             { tab: "checkin" as const, icon: <CheckCircle className="h-5 w-5" />, label: "Check-in" },
             { tab: "plans" as const, icon: <List className="h-5 w-5" />, label: "Planos" },
-            { tab: "professors" as const, icon: <Users className="h-5 w-5" />, label: "Profs" },
             { tab: "feedback" as const, icon: <MessageSquare className="h-5 w-5" />, label: "Feedback" },
           ]
         ).map(({ tab, icon, label }) => (
           <button
             key={tab}
-            onClick={() => setSelectedTab(tab)}
+            onClick={() => handleTabChange(tab)}
             className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-[10px] font-medium transition-colors cursor-pointer ${selectedTab === tab ? "text-amber-500" : "text-zinc-500"}`}
           >
             {icon}
@@ -214,7 +243,6 @@ export function StudentDashboard() {
                 {selectedTab === "overview" && "Visão Geral"}
                 {selectedTab === "checkin" && "Check-in semanal"}
                 {selectedTab === "plans" && "Planos disponíveis"}
-                {selectedTab === "professors" && "Nossos professores"}
                 {selectedTab === "feedback" && "Seu feedback"}
               </p>
               <h1 className="text-xl font-bold text-zinc-50 flex items-center gap-3">
@@ -439,14 +467,14 @@ export function StudentDashboard() {
 
                       <button
                         onClick={handleCheckIn}
-                        disabled={!canCheckIn || creating}
+                        disabled={!canCheckIn || checkInStatus === "loading"}
                         className={`w-full py-6 rounded-[30px] text-lg font-bold transition-all transform active:scale-95 shadow-2xl ${
-                          canCheckIn && !creating
+                          canCheckIn && checkInStatus !== "loading"
                             ? "bg-amber-500 text-black hover:bg-amber-400 shadow-amber-500/20 cursor-pointer"
                             : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
                         }`}
                       >
-                        {creating ? (
+                        {checkInStatus === "loading" ? (
                           <span className="flex items-center justify-center gap-2">
                             <span className="h-4 w-4 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" />
                             Processando...
@@ -464,7 +492,15 @@ export function StudentDashboard() {
                         )}
                       </button>
 
-                      {!canCheckIn && (
+                      <div className="flex justify-center">
+                        <StatusBadge
+                          status={checkInStatus}
+                          successMessage="Check-in realizado!"
+                          errorMessage="Falha no check-in, tente novamente."
+                        />
+                      </div>
+
+                      {!canCheckIn && checkInStatus === "idle" && (
                         <p className="text-red-400/80 text-xs font-medium bg-red-500/5 py-2 rounded-full border border-red-500/10">
                           {paymentOverdue
                             ? "Mensalidade pendente. Procure seu professor para regularizar."
@@ -527,41 +563,6 @@ export function StudentDashboard() {
             </div>
           )}
 
-          {selectedTab === "professors" && (
-            <div className="grid gap-6 md:grid-cols-3 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              {professors.map((prof) => (
-                <div
-                  key={prof.id}
-                  className="rounded-3xl bg-zinc-900/40 border border-zinc-800/60 p-6 flex flex-col items-center text-center group hover:border-amber-500/20 transition-all"
-                >
-                  <div className="h-20 w-20 rounded-[28px] bg-zinc-800 border border-zinc-700/50 flex items-center justify-center text-zinc-500 mb-4 group-hover:scale-110 transition-transform duration-300 overflow-hidden shadow-lg shadow-amber-500/5">
-                    {prof.photoURL ? (
-                      <img
-                        src={prof.photoURL}
-                        alt={prof.name || ""}
-                        className="w-full h-full object-cover block"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <Users className="h-10 w-10" />
-                    )}
-                  </div>
-                  <h3 className="font-bold text-zinc-100 text-lg">
-                    {prof.name || "Professor"}
-                  </h3>
-                  <p className="text-xs text-amber-500/80 mt-1 uppercase tracking-widest font-bold">
-                    Coach Certificado
-                  </p>
-                  <div className="mt-4 pt-4 border-t border-zinc-800/50 w-full">
-                    <p className="text-xs text-zinc-500 italic">
-                      Disponível para treinos
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
           {selectedTab === "feedback" && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               {!hasActivePlan ? (
@@ -585,28 +586,34 @@ export function StudentDashboard() {
                         onChange={(e) => setFeedbackText(e.target.value.slice(0, 64))}
                         maxLength={64}
                         placeholder="Ex: Aula incrível hoje!"
-                        className="w-full rounded-xl border border-zinc-800 bg-black/30 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-amber-500/40"
+                        disabled={feedbackStatus === "loading"}
+                        className="w-full rounded-xl border border-zinc-800 bg-black/30 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-amber-500/40 disabled:opacity-50"
                       />
                       <button
-                        onClick={async () => {
-                          if (!profile) return;
-                          const msg = feedbackText.trim().slice(0, 64);
-                          if (!msg) return;
-                          await createFeedback({
-                            userId: profile.id,
-                            userName: profile.name ?? null,
-                            message: msg,
-                          });
-                          setFeedbackText("");
-                        }}
-                        className="rounded-xl bg-amber-500 px-5 py-3 text-sm font-bold text-black hover:bg-amber-400 transition cursor-pointer"
+                        onClick={handleSendFeedback}
+                        disabled={feedbackStatus === "loading" || !feedbackText.trim()}
+                        className="rounded-xl bg-amber-500 px-5 py-3 text-sm font-bold text-black hover:bg-amber-400 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                       >
-                        Enviar
+                        {feedbackStatus === "loading" ? (
+                          <>
+                            <span className="h-3.5 w-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                            Enviando...
+                          </>
+                        ) : (
+                          "Enviar"
+                        )}
                       </button>
                     </div>
-                    <p className="mt-2 text-[11px] text-zinc-500">
-                      {feedbackText.trim().length}/64
-                    </p>
+                    <div className="mt-2 flex items-center gap-3">
+                      <p className="text-[11px] text-zinc-500">
+                        {feedbackText.trim().length}/64
+                      </p>
+                      <StatusBadge
+                        status={feedbackStatus}
+                        successMessage="Feedback enviado!"
+                        errorMessage="Erro ao enviar. Tente novamente."
+                      />
+                    </div>
                   </div>
 
                   <div className="rounded-3xl border border-zinc-800/60 bg-zinc-900/20 overflow-hidden">

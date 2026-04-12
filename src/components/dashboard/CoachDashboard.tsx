@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { CheckIn, Plan, StudentSummary } from "@/lib/types";
+import { filterStudents } from "@/lib/utils/studentFilter";
 import { useAuth } from "../auth/AuthProvider";
 import { Home, List, Users, CheckCircle, Bell } from "lucide-react";
 import { OverviewTab } from "./coach/OverviewTab";
@@ -49,7 +51,13 @@ export function CoachDashboard() {
   const [selectedStudentForHistory, setSelectedStudentForHistory] =
     useState<StudentSummary | null>(null);
   const [checkinHistory, setCheckinHistory] = useState<CheckIn[]>([]);
-  const [selectedTab, setSelectedTab] = useState<CoachTab>("overview");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const validTabs: CoachTab[] = ["overview", "plans", "professors", "students", "checkins", "expirations"];
+  const initialTab = (searchParams.get("tab") as CoachTab | null);
+  const [selectedTab, setSelectedTab] = useState<CoachTab>(
+    initialTab && validTabs.includes(initialTab) ? initialTab : "overview",
+  );
   const [professors, setProfessors] = useState<StudentSummary[]>([]);
   const [recentCheckins, setRecentCheckins] = useState<CheckIn[]>([]);
   const [selectedStudentIdForCheckins, setSelectedStudentIdForCheckins] =
@@ -57,6 +65,11 @@ export function CoachDashboard() {
   const [checkinCounts, setCheckinCounts] = useState<Map<string, number>>(
     new Map(),
   );
+
+  const handleTabChange = useCallback((tab: CoachTab) => {
+    setSelectedTab(tab);
+    router.replace(`?tab=${tab}`, { scroll: false });
+  }, [router]);
 
   // ── Real-time listeners ──────────────────────────────────────────────
   useEffect(() => {
@@ -250,44 +263,10 @@ export function CoachDashboard() {
   }, []);
 
   // ── Filtered students ────────────────────────────────────────────────
-  const filteredStudents = useMemo(() => {
-    let list = studentsWithCounts;
-
-    if (selectedPlanId !== "all") {
-      list = list.filter((s) => s.planId === selectedPlanId);
-    }
-
-    if (paymentFilter !== "all") {
-      const now = new Date();
-      list = list.filter((s) => {
-        const hasDueDay = s.paymentDueDay != null;
-        if (paymentFilter === "none") return !hasDueDay;
-        if (!hasDueDay) return false;
-
-        let isPaid = false;
-        if (s.paymentValidUntil) {
-          isPaid = now.getTime() <= s.paymentValidUntil.toDate().getTime();
-        } else {
-          isPaid = !!s.monthlyPaymentPaid || now.getDate() <= s.paymentDueDay!;
-        }
-
-        if (paymentFilter === "pending") return !isPaid;
-
-        if (isPaid) {
-          if (!s.paymentValidUntil) return paymentFilter === "active";
-          const validUntil = s.paymentValidUntil.toDate();
-          const isNextMonth =
-            validUntil.getMonth() !== now.getMonth() ||
-            validUntil.getFullYear() !== now.getFullYear();
-          if (paymentFilter === "paid") return isNextMonth;
-          if (paymentFilter === "active") return !isNextMonth;
-        }
-        return false;
-      });
-    }
-
-    return list;
-  }, [studentsWithCounts, selectedPlanId, paymentFilter]);
+  const filteredStudents = useMemo(
+    () => filterStudents(studentsWithCounts, { selectedPlanId, paymentFilter }),
+    [studentsWithCounts, selectedPlanId, paymentFilter],
+  );
 
   // ── Render ───────────────────────────────────────────────────────────
   return (
@@ -319,7 +298,7 @@ export function CoachDashboard() {
           ).map(({ tab, icon: Icon, label }) => (
             <button
               key={tab}
-              onClick={() => setSelectedTab(tab)}
+              onClick={() => handleTabChange(tab)}
               className={`flex items-center gap-3 w-full text-left rounded-lg px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer ${selectedTab === tab ? "bg-zinc-800/60 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"}`}
             >
               <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
@@ -342,7 +321,7 @@ export function CoachDashboard() {
         ).map(({ tab, icon, label }) => (
           <button
             key={tab}
-            onClick={() => setSelectedTab(tab)}
+            onClick={() => handleTabChange(tab)}
             className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-[10px] font-medium transition-colors cursor-pointer ${selectedTab === tab ? "text-amber-500" : "text-zinc-500"}`}
           >
             {icon}
