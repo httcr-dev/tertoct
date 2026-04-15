@@ -43,6 +43,14 @@ service cloud.firestore {
       return role == 'student';
     }
 
+    function canReadCheckin(checkinData) {
+      return isSignedIn() && (
+        checkinData.userId == request.auth.uid ||
+        isCoach() ||
+        isAdmin()
+      );
+    }
+
     function currentUserPlanId() {
       return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.planId
@@ -92,17 +100,45 @@ service cloud.firestore {
     }
 
     match /checkins/{checkinId} {
-      allow read: if isSignedIn();
+      allow read: if canReadCheckin(resource.data);
 
       // Students can only create check-ins for themselves,
       // for their current active plan, and with payment up to date.
       allow create: if isStudent() &&
         request.resource.data.userId == request.auth.uid &&
         request.resource.data.planId is string &&
+        request.resource.data.weekKey is string &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.planId
           == request.resource.data.planId &&
         get(/databases/$(database)/documents/plans/$(request.resource.data.planId)).data.active
           == true &&
+        existsAfter(
+          /databases/$(database)/documents/checkinCounters/$(request.auth.uid + '_' + request.resource.data.weekKey)
+        ) &&
+        getAfter(
+          /databases/$(database)/documents/checkinCounters/$(request.auth.uid + '_' + request.resource.data.weekKey)
+        ).data.userId == request.auth.uid &&
+        getAfter(
+          /databases/$(database)/documents/checkinCounters/$(request.auth.uid + '_' + request.resource.data.weekKey)
+        ).data.weekKey == request.resource.data.weekKey &&
+        getAfter(
+          /databases/$(database)/documents/checkinCounters/$(request.auth.uid + '_' + request.resource.data.weekKey)
+        ).data.count <= get(/databases/$(database)/documents/plans/$(request.resource.data.planId)).data.classesPerWeek &&
+        (
+          (
+            !exists(/databases/$(database)/documents/checkinCounters/$(request.auth.uid + '_' + request.resource.data.weekKey)) &&
+            getAfter(
+              /databases/$(database)/documents/checkinCounters/$(request.auth.uid + '_' + request.resource.data.weekKey)
+            ).data.count == 1
+          ) ||
+          (
+            exists(/databases/$(database)/documents/checkinCounters/$(request.auth.uid + '_' + request.resource.data.weekKey)) &&
+            getAfter(
+              /databases/$(database)/documents/checkinCounters/$(request.auth.uid + '_' + request.resource.data.weekKey)
+            ).data.count ==
+            get(/databases/$(database)/documents/checkinCounters/$(request.auth.uid + '_' + request.resource.data.weekKey)).data.count + 1
+          )
+        ) &&
         // Payment check: allow if no due day is set, payment is marked as paid, or within valid expiration date
         (
           !('paymentDueDay' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data) ||
@@ -137,6 +173,32 @@ service cloud.firestore {
 
       // Check-ins are append-only to manter histórico confiável.
       allow update, delete: if false;
+    }
+
+    match /checkinCounters/{counterId} {
+      allow read: if isSignedIn() && (
+        counterId.matches('^' + request.auth.uid + '_.*$') ||
+        isCoach() ||
+        isAdmin()
+      );
+
+      allow create, update: if isStudent() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.weekKey is string &&
+        counterId == request.auth.uid + '_' + request.resource.data.weekKey &&
+        (
+          (
+            !exists(/databases/$(database)/documents/checkinCounters/$(counterId)) &&
+            request.resource.data.count == 1
+          ) ||
+          (
+            exists(/databases/$(database)/documents/checkinCounters/$(counterId)) &&
+            request.resource.data.count ==
+              get(/databases/$(database)/documents/checkinCounters/$(counterId)).data.count + 1
+          )
+        );
+
+      allow delete: if false;
     }
 
     match /feedbacks/{feedbackId} {

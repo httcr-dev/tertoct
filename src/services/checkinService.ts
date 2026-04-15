@@ -1,24 +1,78 @@
 import {
-  addDoc,
+  doc,
   getDocs,
   onSnapshot,
   query,
+  runTransaction,
   type Unsubscribe,
   where,
   serverTimestamp,
 } from "firebase/firestore";
 import type { CheckIn } from "@/lib/types";
-import { checkinsCol } from "@/lib/firestore/refs";
+import { checkinCounterDoc, checkinsCol, planDoc, userDoc } from "@/lib/firestore/refs";
 import { mapCheckin } from "@/lib/firestore/mappers";
+import { getFirestoreDb } from "@/lib/firebase";
+import { startOfWeek } from "@/lib/utils/date";
+
+function getWeekKey(date = new Date()): string {
+  return startOfWeek(date).toISOString().slice(0, 10);
+}
 
 export async function createCheckIn(
   userId: string,
   planId: string,
 ): Promise<void> {
-  await addDoc(checkinsCol(), {
-    userId,
-    planId,
-    createdAt: serverTimestamp(),
+  const db = getFirestoreDb();
+  const weekKey = getWeekKey();
+  const counterId = `${userId}_${weekKey}`;
+
+  await runTransaction(db, async (tx) => {
+    const [userSnap, planSnap, counterSnap] = await Promise.all([
+      tx.get(userDoc(userId)),
+      tx.get(planDoc(planId)),
+      tx.get(checkinCounterDoc(counterId)),
+    ]);
+
+    if (!userSnap.exists() || !planSnap.exists()) {
+      throw new Error("Invalid user or plan");
+    }
+
+    const user = userSnap.data();
+    const plan = planSnap.data();
+
+    if (user.planId !== planId || plan.active !== true) {
+      throw new Error("Plan is not valid for this user");
+    }
+
+    const currentCount =
+      counterSnap.exists() && typeof counterSnap.data().count === "number"
+        ? counterSnap.data().count
+        : 0;
+    const allowed = typeof plan.classesPerWeek === "number" ? plan.classesPerWeek : 0;
+
+    if (currentCount >= allowed) {
+      throw new Error("Weekly check-in limit reached");
+    }
+
+    const checkinRef = doc(checkinsCol());
+
+    tx.set(
+      checkinCounterDoc(counterId),
+      {
+        userId,
+        weekKey,
+        count: currentCount + 1,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    tx.set(checkinRef, {
+      userId,
+      planId,
+      weekKey,
+      createdAt: serverTimestamp(),
+    });
   });
 }
 
