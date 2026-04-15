@@ -1,7 +1,7 @@
 import { getDocs, query, where } from "firebase/firestore";
 import type { Plan } from "@/lib/types";
 import { mapPlan } from "@/lib/firestore/mappers";
-import { plansCol, usersCol } from "@/lib/firestore/refs";
+import { plansCol, publicProfilesCol } from "@/lib/firestore/refs";
 
 export interface CoachCardData {
   id: string;
@@ -19,7 +19,7 @@ export async function fetchActivePlans(): Promise<Plan[]> {
 
 export async function fetchActiveCoaches(): Promise<CoachCardData[]> {
   const snap = await getDocs(
-    query(usersCol(), where("role", "in", ["coach", "admin"])),
+    query(publicProfilesCol(), where("role", "in", ["coach", "admin"])),
   );
 
   const coaches: CoachCardData[] = [];

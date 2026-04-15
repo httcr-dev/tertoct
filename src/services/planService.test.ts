@@ -2,6 +2,10 @@
 const mockAddDoc = jest.fn();
 const mockUpdateDoc = jest.fn();
 const mockDeleteDoc = jest.fn();
+const mockGetDocs = jest.fn();
+const mockQuery = jest.fn().mockReturnValue("plans-users-query");
+const mockWhere = jest.fn().mockReturnValue("where-clause");
+const mockLimit = jest.fn().mockReturnValue("limit-clause");
 const mockCollection = jest.fn().mockReturnValue("plans-collection-ref");
 const mockDoc = jest.fn().mockReturnValue("plan-doc-ref");
 const mockServerTimestamp = jest.fn().mockReturnValue("SERVER_TIMESTAMP");
@@ -12,6 +16,10 @@ jest.mock("firebase/firestore", () => ({
   addDoc: (...args: any[]) => mockAddDoc(...args),
   updateDoc: (...args: any[]) => mockUpdateDoc(...args),
   deleteDoc: (...args: any[]) => mockDeleteDoc(...args),
+  getDocs: (...args: any[]) => mockGetDocs(...args),
+  query: (...args: any[]) => mockQuery(...args),
+  where: (...args: any[]) => mockWhere(...args),
+  limit: (...args: any[]) => mockLimit(...args),
   serverTimestamp: () => mockServerTimestamp(),
 }));
 
@@ -19,11 +27,18 @@ jest.mock("@/lib/firebase", () => ({
   getFirestoreDb: jest.fn().mockReturnValue("mock-db"),
 }));
 
-import { createPlan, updatePlan, deletePlan, togglePlanActive } from "./planService";
+import {
+  createPlan,
+  updatePlan,
+  deletePlan,
+  togglePlanActive,
+  PlanInUseError,
+} from "./planService";
 import type { Plan } from "@/lib/types";
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockGetDocs.mockResolvedValue({ empty: true });
 });
 
 describe("createPlan", () => {
@@ -96,11 +111,21 @@ describe("updatePlan", () => {
 });
 
 describe("deletePlan", () => {
-  it("calls deleteDoc with the plan doc ref", async () => {
+  it("calls deleteDoc with the plan doc ref when no users are linked", async () => {
     await deletePlan("plan-456");
 
+    expect(mockQuery).toHaveBeenCalled();
+    expect(mockWhere).toHaveBeenCalledWith("planId", "==", "plan-456");
+    expect(mockLimit).toHaveBeenCalledWith(1);
     expect(mockDoc).toHaveBeenCalledWith("mock-db", "plans", "plan-456");
     expect(mockDeleteDoc).toHaveBeenCalledWith("plan-doc-ref");
+  });
+
+  it("throws PlanInUseError and skips delete when linked users exist", async () => {
+    mockGetDocs.mockResolvedValueOnce({ empty: false });
+
+    await expect(deletePlan("plan-456")).rejects.toBeInstanceOf(PlanInUseError);
+    expect(mockDeleteDoc).not.toHaveBeenCalled();
   });
 });
 

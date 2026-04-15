@@ -3,6 +3,7 @@ import { getFirestoreDb } from "@/lib/firebase";
 
 export const collections = {
   users: "users",
+  publicProfiles: "publicProfiles",
   plans: "plans",
   checkins: "checkins",
   checkinCounters: "checkinCounters",
@@ -14,6 +15,14 @@ export function usersCol() {
 
 export function userDoc(uid: string) {
   return doc(getFirestoreDb(), collections.users, uid);
+}
+
+export function publicProfilesCol() {
+  return collection(getFirestoreDb(), collections.publicProfiles);
+}
+
+export function publicProfileDoc(uid: string) {
+  return doc(getFirestoreDb(), collections.publicProfiles, uid);
 }
 
 export function plansCol() {

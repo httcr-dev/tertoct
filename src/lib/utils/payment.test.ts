@@ -18,13 +18,13 @@ describe("isPaymentOverdue", () => {
     expect(isPaymentOverdue(undefined)).toBe(false);
   });
 
-  it("returns false when no paymentDueDay is set", () => {
-    const profile = makeProfile({ paymentDueDay: undefined });
+  it("returns false when no payment metadata is set", () => {
+    const profile = makeProfile({ paymentDueDay: undefined, monthlyPaymentPaid: undefined });
     expect(isPaymentOverdue(profile)).toBe(false);
   });
 
-  it("returns false when paymentDueDay is null", () => {
-    const profile = makeProfile({ paymentDueDay: null });
+  it("returns false when paymentDueDay is null and no explicit unpaid flag", () => {
+    const profile = makeProfile({ paymentDueDay: null, monthlyPaymentPaid: undefined });
     expect(isPaymentOverdue(profile)).toBe(false);
   });
 
@@ -82,27 +82,20 @@ describe("isPaymentOverdue", () => {
       expect(isPaymentOverdue(profile)).toBe(false);
     });
 
-    it("returns false when current day <= dueDay", () => {
-      const now = new Date();
+    it("returns false when monthlyPaymentPaid is undefined", () => {
       const profile = makeProfile({
-        paymentDueDay: 31, // Always in the future (max day)
-        monthlyPaymentPaid: false,
+        paymentDueDay: 1,
+        monthlyPaymentPaid: undefined,
       });
       expect(isPaymentOverdue(profile)).toBe(false);
     });
 
-    it("returns true when current day > dueDay and not paid", () => {
+    it("returns true when explicitly marked unpaid without validUntil", () => {
       const profile = makeProfile({
-        paymentDueDay: 1, // Day 1 is always in the past unless today is the 1st
+        paymentDueDay: 31,
         monthlyPaymentPaid: false,
       });
-      const now = new Date();
-      if (now.getDate() > 1) {
-        expect(isPaymentOverdue(profile)).toBe(true);
-      } else {
-        // On the 1st, it's not overdue
-        expect(isPaymentOverdue(profile)).toBe(false);
-      }
+      expect(isPaymentOverdue(profile)).toBe(true);
     });
   });
 });

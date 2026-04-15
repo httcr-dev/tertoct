@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { verifyToken } from "@/lib/auth/verifyToken";
 import { getClientIdentifier } from "@/lib/auth/clientIdentifier";
 import { checkRateLimit } from "@/lib/auth/rateLimit";
+import { buildAuthRateLimitKey } from "@/lib/auth/rateLimitKey";
+import {
+  captureServerError,
+  logServerEvent,
+  trackStatusAnomaly,
+} from "@/lib/observability/serverObservability";
 
 const VERIFY_ENDPOINT_LIMIT = {
   windowMs: 60_000,
@@ -12,12 +18,21 @@ export async function POST(req: Request) {
   try {
     const ip = await getClientIdentifier();
     const limit = await checkRateLimit(
-      `auth-verify:POST:${ip}`,
+      buildAuthRateLimitKey({
+        route: "auth-verify",
+        method: "POST",
+        clientId: ip,
+      }),
       VERIFY_ENDPOINT_LIMIT,
     );
 
     if (!limit.allowed) {
-      console.warn("[AUTH] Verify endpoint rate limited", { ip });
+      logServerEvent("warn", {
+        route: "/api/auth/verify",
+        action: "rate-limit",
+        errorCode: "RATE_LIMIT_GLOBAL",
+        details: { ip },
+      });
       return NextResponse.json(
         { valid: false, error: "Too many requests" },
         { status: 429 },
@@ -30,11 +45,36 @@ export async function POST(req: Request) {
       return NextResponse.json({ valid: false, error: "No token" }, { status: 400 });
     }
 
-    await verifyToken(token, { checkRevoked: true });
+    const decoded = await verifyToken(token, { checkRevoked: true });
+    const uidLimit = await checkRateLimit(
+      buildAuthRateLimitKey({
+        route: "auth-verify",
+        method: "POST",
+        clientId: ip,
+        uid: decoded.uid,
+      }),
+      VERIFY_ENDPOINT_LIMIT,
+    );
+    if (!uidLimit.allowed) {
+      logServerEvent("warn", {
+        route: "/api/auth/verify",
+        action: "rate-limit",
+        uid: decoded.uid,
+        errorCode: "RATE_LIMIT_UID",
+        details: { ip },
+      });
+      return NextResponse.json(
+        { valid: false, error: "Too many requests" },
+        { status: 429 },
+      );
+    }
     return NextResponse.json({ valid: true });
   } catch (error) {
-    console.error("[AUTH] Verify endpoint token validation failed", {
-      error: error instanceof Error ? error.message : "Unknown error",
+    trackStatusAnomaly("/api/auth/verify", 401);
+    captureServerError(error, {
+      route: "/api/auth/verify",
+      action: "verify-token",
+      errorCode: "INVALID_TOKEN",
     });
     return NextResponse.json(
       { valid: false, error: "Invalid token" },

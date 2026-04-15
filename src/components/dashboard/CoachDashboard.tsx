@@ -18,6 +18,7 @@ import {
   createPlan,
   updatePlan,
   deletePlan as deletePlanService,
+  PlanInUseError,
   togglePlanActive,
 } from "@/services/planService";
 import {
@@ -227,6 +228,10 @@ export function CoachDashboard() {
         await deletePlanService(plan.id);
         if (editingPlan?.id === plan.id) setEditingPlan(null);
       } catch (err) {
+        if (err instanceof PlanInUseError) {
+          window.alert(err.message);
+          return;
+        }
         console.error("Failed to delete plan");
       }
     },

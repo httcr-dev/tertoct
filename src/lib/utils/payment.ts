@@ -16,10 +16,6 @@ export function isPaymentOverdue(
   profile: AppUserProfile | null | undefined,
 ): boolean {
   if (!profile) return false;
-  const dueDay = profile.paymentDueDay;
-  if (dueDay == null) return false; // No due day set, no restriction
-
-  // Check if there's a valid expiration date set by coach
   const validUntil = profile.paymentValidUntil;
   const now = new Date();
 
@@ -29,14 +25,10 @@ export function isPaymentOverdue(
       if (!d) return false;
       return now.getTime() > d.getTime();
     } catch {
-      // If parsing fails, fall back to the boolean-based rule below.
+      // If parsing fails, fall through to legacy flag.
     }
   }
 
-  // Fallback for older records or missing validUntil
-  const isPaid = profile.monthlyPaymentPaid;
-  if (isPaid) return false; // marked as paid indefinitely
-
-  const currentDay = now.getDate();
-  return currentDay > dueDay;
+  // Legacy fallback: while migrating old records without canonical expiration.
+  return profile.monthlyPaymentPaid === false;
 }

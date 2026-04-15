@@ -1,11 +1,22 @@
 import {
   addDoc,
-  updateDoc,
   deleteDoc,
+  getDocs,
+  limit,
+  query,
   serverTimestamp,
+  updateDoc,
+  where,
 } from "firebase/firestore";
 import type { Plan } from "@/lib/types";
-import { planDoc, plansCol } from "@/lib/firestore/refs";
+import { planDoc, plansCol, usersCol } from "@/lib/firestore/refs";
+
+export class PlanInUseError extends Error {
+  constructor() {
+    super("Não é possível excluir este plano: há alunos vinculados.");
+    this.name = "PlanInUseError";
+  }
+}
 
 export async function createPlan(
   fields: Omit<Plan, "id">,
@@ -28,6 +39,12 @@ export async function updatePlan(
 }
 
 export async function deletePlan(planId: string): Promise<void> {
+  const linkedUsers = await getDocs(
+    query(usersCol(), where("planId", "==", planId), limit(1)),
+  );
+  if (!linkedUsers.empty) {
+    throw new PlanInUseError();
+  }
   await deleteDoc(planDoc(planId));
 }
 

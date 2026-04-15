@@ -23,6 +23,10 @@ import {
   googleProvider,
   ensureUserDocument,
 } from "@/lib/firebase";
+import {
+  initialCookieSyncState,
+  shouldSyncCookie,
+} from "@/components/auth/cookieSyncState";
 
 interface AuthContextValue {
   firebaseUser: FirebaseUser | null;
@@ -38,7 +42,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [profile, setProfile] = useState<AppUserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const hasSyncedCookieForUidRef = useRef<string | null>(null);
+  const cookieSyncStateRef = useRef(initialCookieSyncState);
+  const recoveringSessionRef = useRef(false);
   const authEventIdRef = useRef(0);
 
   useEffect(() => {
@@ -54,20 +59,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       unsubscribe = onIdTokenChanged(auth, (user) => {
         const authEventId = ++authEventIdRef.current;
+        if (recoveringSessionRef.current && user) {
+          return;
+        }
         setFirebaseUser(user);
         setLoading(false);
 
         if (user) {
           void (async () => {
             try {
-              if (hasSyncedCookieForUidRef.current !== user.uid) {
-                const token = await user.getIdToken();
-                await fetch("/api/auth/cookie", {
+              const tokenResult = await user.getIdTokenResult();
+              const token = tokenResult.token;
+              const tokenExpiry = tokenResult.expirationTime;
+              const nextSyncState = { token, expiration: tokenExpiry };
+              const mustSyncCookie = shouldSyncCookie(
+                cookieSyncStateRef.current,
+                nextSyncState,
+              );
+
+              if (mustSyncCookie) {
+                const cookieResponse = await fetch("/api/auth/cookie", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ token }),
                 });
-                hasSyncedCookieForUidRef.current = user.uid;
+                if (!cookieResponse.ok) {
+                  throw new Error("Cookie sync failed");
+                }
+                cookieSyncStateRef.current = nextSyncState;
               }
 
               const ensured = await ensureUserDocument(user);
@@ -77,17 +96,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             } catch (error) {
               console.error("Failed to ensure user document or set cookie", error);
               if (authEventId === authEventIdRef.current) {
+                recoveringSessionRef.current = true;
+                cookieSyncStateRef.current = initialCookieSyncState;
+                setFirebaseUser(null);
                 setProfile(null);
+                try {
+                  await fetch("/api/auth/cookie", { method: "DELETE" });
+                } catch {
+                  // best effort cookie cleanup
+                }
+                try {
+                  await signOut(auth);
+                } finally {
+                  recoveringSessionRef.current = false;
+                }
               }
             }
           })();
         } else {
-          if (hasSyncedCookieForUidRef.current) {
-            void fetch("/api/auth/cookie", { method: "DELETE" }).catch(() => {
-              // best effort cookie cleanup
-            });
-            hasSyncedCookieForUidRef.current = null;
-          }
+          void fetch("/api/auth/cookie", { method: "DELETE" }).catch(() => {
+            // best effort cookie cleanup
+          });
+          cookieSyncStateRef.current = initialCookieSyncState;
           setProfile(null);
         }
       });
