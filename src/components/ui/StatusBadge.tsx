@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
 type Status = "idle" | "loading" | "success" | "error";
 
 interface StatusBadgeProps {
@@ -15,19 +13,7 @@ export function StatusBadge({
   successMessage = "Feito!",
   errorMessage = "Erro. Tente novamente.",
 }: StatusBadgeProps) {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    if (status === "success" || status === "error") {
-      setVisible(true);
-      const timer = setTimeout(() => setVisible(false), 2500);
-      return () => clearTimeout(timer);
-    } else {
-      setVisible(false);
-    }
-  }, [status]);
-
-  if (!visible) return null;
+  if (status !== "success" && status !== "error") return null;
 
   const isSuccess = status === "success";
 

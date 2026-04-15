@@ -2,6 +2,37 @@ import { NextRequest, NextResponse } from "next/server";
 import { AUTH_COOKIE_NAME } from "@/lib/auth/cookies";
 import { verifyToken } from "@/lib/auth/verifyToken";
 import { isAuthorizedForPath } from "@/lib/auth/authorization";
+import {
+  captureServerError,
+  logServerEvent,
+  trackStatusAnomaly,
+} from "@/lib/observability/serverObservability";
+
+function generateNonce(): string {
+  return crypto.randomUUID();
+}
+
+function buildCsp(nonce: string): string {
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}'`,
+    `style-src 'self' 'nonce-${nonce}'`,
+    "img-src 'self' data: https:",
+    "connect-src 'self' https:",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join("; ");
+}
+
+function withSecurityHeaders(response: NextResponse, nonce: string): NextResponse {
+  response.headers.set("Content-Security-Policy", buildCsp(nonce));
+  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.headers.set("x-nonce", nonce);
+  return response;
+}
 
 function isProtectedPath(pathname: string) {
   return pathname.startsWith("/dashboard") || pathname.startsWith("/api/private");
@@ -11,34 +42,51 @@ function isApiPath(pathname: string) {
   return pathname.startsWith("/api/");
 }
 
-function unauthenticatedResponse(req: NextRequest) {
+function unauthenticatedResponse(req: NextRequest, nonce: string) {
   if (isApiPath(req.nextUrl.pathname)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    trackStatusAnomaly(req.nextUrl.pathname, 401);
+    return withSecurityHeaders(
+      NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      nonce,
+    );
   }
 
-  return NextResponse.redirect(new URL("/", req.url));
+  return withSecurityHeaders(NextResponse.redirect(new URL("/", req.url)), nonce);
 }
 
-function forbiddenResponse(req: NextRequest) {
+function forbiddenResponse(req: NextRequest, nonce: string) {
   if (isApiPath(req.nextUrl.pathname)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    trackStatusAnomaly(req.nextUrl.pathname, 403);
+    return withSecurityHeaders(
+      NextResponse.json({ error: "Forbidden" }, { status: 403 }),
+      nonce,
+    );
   }
 
-  return NextResponse.redirect(new URL("/dashboard", req.url));
+  return withSecurityHeaders(
+    NextResponse.redirect(new URL("/dashboard", req.url)),
+    nonce,
+  );
 }
 
 export async function proxy(req: NextRequest) {
+  const nonce = generateNonce();
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set("x-nonce", nonce);
   const pathname = req.nextUrl.pathname;
   const isProtected = isProtectedPath(pathname);
 
   if (!isProtected) {
-    return NextResponse.next();
+    return withSecurityHeaders(
+      NextResponse.next({ request: { headers: requestHeaders } }),
+      nonce,
+    );
   }
 
   const authToken = req.cookies.get(AUTH_COOKIE_NAME)?.value;
 
   if (!authToken) {
-    return unauthenticatedResponse(req);
+    return unauthenticatedResponse(req, nonce);
   }
 
   try {
@@ -46,19 +94,31 @@ export async function proxy(req: NextRequest) {
     const authorized = isAuthorizedForPath(pathname, decodedToken);
 
     if (!authorized) {
-      console.warn("[AUTHZ] Role denied", {
-        path: pathname,
+      logServerEvent("warn", {
+        route: pathname,
+        action: "proxy-authorize",
         uid: decodedToken.uid,
+        errorCode: "ROLE_FORBIDDEN",
+        status: 403,
       });
-      return forbiddenResponse(req);
+      return forbiddenResponse(req, nonce);
     }
 
-    return NextResponse.next();
+    return withSecurityHeaders(
+      NextResponse.next({ request: { headers: requestHeaders } }),
+      nonce,
+    );
   } catch (error) {
-    console.error("[AUTH] Session validation failed", {
-      path: pathname,
-      error: error instanceof Error ? error.message : "Unknown error",
+    captureServerError(error, {
+      route: pathname,
+      action: "proxy-verify-session",
+      errorCode: "TOKEN_INVALID_OR_REVOKED",
+      status: 401,
     });
-    return unauthenticatedResponse(req);
+    return unauthenticatedResponse(req, nonce);
   }
 }
+
+export const config = {
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)"],
+};

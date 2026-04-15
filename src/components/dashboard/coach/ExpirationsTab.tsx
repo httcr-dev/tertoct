@@ -10,6 +10,13 @@ interface ExpirationsTabProps {
   updateUserPhone: (userId: string, phone: string | null) => Promise<void>;
 }
 
+type ProcessedStudent = StudentSummary & {
+  dueDate: Date | null;
+  diffDays: number;
+  status: "due_tomorrow" | "expired" | "active" | "no_date";
+  currentPhone: string;
+};
+
 export function ExpirationsTab({
   students,
   plans,
@@ -125,7 +132,7 @@ export function ExpirationsTab({
     return list;
   }, [processedStudents, selectedPlanId, expirationFilter]);
 
-  const sendWhatsApp = (student: any) => {
+  const sendWhatsApp = (student: ProcessedStudent) => {
     const rawPhone = student.phone || student.currentPhone;
     if (!rawPhone) return;
 

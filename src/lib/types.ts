@@ -1,5 +1,7 @@
 import type { Timestamp } from "firebase/firestore";
 
+export type DateLikeTimestamp = Timestamp | { toDate: () => Date } | Date | string;
+
 export type AppUserRole = "admin" | "coach" | "student";
 
 export interface AppUserProfile {
@@ -14,7 +16,7 @@ export interface AppUserProfile {
   paymentDueDay?: number | null;
   monthlyPaymentPaid?: boolean;
   phone?: string | null;
-  paymentValidUntil?: any | null;
+  paymentValidUntil?: DateLikeTimestamp | null;
 }
 
 export interface Plan {
@@ -36,7 +38,7 @@ export interface UserDocument {
   paymentDueDay?: number | null;
   monthlyPaymentPaid?: boolean;
   phone?: string | null;
-  paymentValidUntil?: Timestamp | null;
+  paymentValidUntil?: DateLikeTimestamp | null;
 }
 
 export interface CheckIn {

@@ -38,6 +38,26 @@ service cloud.firestore {
       ]);
     }
 
+    function isValidSelfUserCreate(userId, data) {
+      return userId == request.auth.uid &&
+        data.role == 'student' &&
+        (!('active' in data) || data.active == true) &&
+        data.keys().hasOnly([
+          'name',
+          'email',
+          'photoURL',
+          'role',
+          'planId',
+          'active',
+          'createdAt'
+        ]);
+    }
+
+    function isPublicCoachProfile(data) {
+      return data.role in ['coach', 'admin'] &&
+        data.keys().hasOnly(['name', 'photoURL', 'role', 'bio']);
+    }
+
     function isStudent() {
       let role = currentRole();
       return role == 'student';
@@ -70,16 +90,12 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      // Allow public read access to coach/admin profiles (public-facing),
-      // while keeping stricter rules for other user documents.
-      allow read: if resource.data.role in ['coach', 'admin'] || (
-        isSignedIn() && (
-          userId == request.auth.uid ||
-          isCoach()
-        )
+      allow read: if isSignedIn() && (
+        userId == request.auth.uid ||
+        (isCoach() && resource.data.role == 'student')
       );
 
-      allow create: if isSignedIn() && userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidSelfUserCreate(userId, request.resource.data);
 
       // Students can update their own profile info.
       // Coaches/admins can update any user.
@@ -89,6 +105,15 @@ service cloud.firestore {
         (isCoach() && canCoachUpdateUser(resource.data, request.resource.data))
       );
 
+      allow delete: if false;
+    }
+
+    match /publicProfiles/{userId} {
+      allow read: if true;
+      allow create, update: if isSignedIn() && (
+        (userId == request.auth.uid && isCoach()) ||
+        isAdmin()
+      ) && isPublicCoachProfile(request.resource.data);
       allow delete: if false;
     }
 
@@ -105,6 +130,7 @@ service cloud.firestore {
       // Students can only create check-ins for themselves,
       // for their current active plan, and with payment up to date.
       allow create: if isStudent() &&
+        isCurrentUserActive() &&
         request.resource.data.userId == request.auth.uid &&
         request.resource.data.planId is string &&
         request.resource.data.weekKey is string &&
@@ -151,23 +177,6 @@ service cloud.firestore {
             'paymentValidUntil' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data &&
             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.paymentValidUntil != null &&
             request.time <= get(/databases/$(database)/documents/users/$(request.auth.uid)).data.paymentValidUntil
-          ) ||
-          // Fallback missing from backend: if they haven't passed the exact due day in the current month
-          // To implement this safely in firestore rules is complex due to UTC, so if they are valid in StudentDashboard
-          // we should ideally trust the UI, but for basic safety we can leave checking 'paymentValidUntil' 
-          // or 'monthlyPaymentPaid'. Wait! If the coach unchecked 'Pago', BOTH monthlyPaymentPaid is false 
-          // AND paymentValidUntil is deleted. 
-          // But on UI, if currentDay <= dueDay, checkin is allowed! 
-          // Let's add a backend check: if today's day of month is <= dueDay. 
-          // request.time is UTC. But we don't need absolute precision here just for fallback checkins!
-          (
-            'paymentDueDay' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data &&
-            // We apply a strict UTC-3 offset here so the backend closely matches 
-            // the student's local daytime clock in Brazil and doesn't push night-time 
-            // checkins onto the next day, failing the precise equality limits.
-            // Also, adding +2 days tolerance because it only evaluates the day of the month, 
-            // ensuring they really cannot check in days after expiration.
-            (request.time - duration.value(3, 'h')).day() <= (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.paymentDueDay + 1)
           )
         );
 
@@ -176,7 +185,11 @@ service cloud.firestore {
     }
 
     match /checkinCounters/{counterId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        isCoach() ||
+        isAdmin()
+      );
 
       allow create, update: if isStudent() &&
         request.resource.data.userId == request.auth.uid &&
@@ -216,12 +229,12 @@ service cloud.firestore {
 
     // Future collections (classes, enrollments, payments) can be refined later.
     match /classes/{classId} {
-      allow read: if isSignedIn();
+      allow read: if isCoach();
       allow create, update, delete: if isCoach();
     }
 
     match /enrollments/{id} {
-      allow read: if isSignedIn();
+      allow read: if isCoach();
       allow create, update, delete: if isCoach();
     }
 

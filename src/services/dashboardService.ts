@@ -9,7 +9,7 @@ import {
 } from "firebase/firestore";
 import type { CheckIn, Plan, StudentSummary } from "@/lib/types";
 import { mapCheckin, mapPlan } from "@/lib/firestore/mappers";
-import { checkinsCol, plansCol, usersCol } from "@/lib/firestore/refs";
+import { checkinsCol, plansCol, publicProfilesCol, usersCol } from "@/lib/firestore/refs";
 
 export function listenPlans(onData: (plans: Plan[]) => void): Unsubscribe {
   return onSnapshot(query(plansCol(), orderBy("name", "asc")), (snap) => {
@@ -40,14 +40,13 @@ export function listenStudents(onData: (students: StudentSummary[]) => void): Un
 }
 
 export function listenCoaches(onData: (coaches: StudentSummary[]) => void): Unsubscribe {
-  return onSnapshot(query(usersCol(), where("role", "==", "coach")), (snap) => {
+  return onSnapshot(query(publicProfilesCol(), where("role", "in", ["coach", "admin"])), (snap) => {
     const next: StudentSummary[] = snap.docs.map((docSnap) => {
       const data = docSnap.data();
       return {
         id: docSnap.id,
         name: data.name ?? null,
         email: data.email ?? null,
-        phone: data.phone ?? null,
         photoURL: data.photoURL ?? null,
         weeklyCheckIns: 0,
         ...(data.active !== undefined ? { active: !!data.active } : {}),

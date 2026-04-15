@@ -1,50 +1,139 @@
 import { NextResponse } from "next/server";
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { AUTH_COOKIE_NAME, getAuthCookieOptions } from "@/lib/auth/cookies";
+import { getClientIdentifier } from "@/lib/auth/clientIdentifier";
 import { checkRateLimit } from "@/lib/auth/rateLimit";
+import { verifyToken } from "@/lib/auth/verifyToken";
+import { buildAuthRateLimitKey } from "@/lib/auth/rateLimitKey";
+import { isTrustedMutationRequest } from "@/lib/security/origin";
+import {
+  captureServerError,
+  logServerEvent,
+  trackStatusAnomaly,
+} from "@/lib/observability/serverObservability";
 
 const COOKIE_ENDPOINT_LIMIT = {
   windowMs: 60_000,
   maxRequests: 20,
 };
 
-async function getClientIp() {
-  const headerStore = await headers();
-  const forwardedFor = headerStore.get("x-forwarded-for");
-  return forwardedFor?.split(",")[0]?.trim() || "unknown";
-}
-
 export async function POST(req: Request) {
+  if (!isTrustedMutationRequest(req)) {
+    return NextResponse.json(
+      { success: false, error: "Forbidden origin" },
+      { status: 403 },
+    );
+  }
+  const ip = await getClientIdentifier();
   try {
-    const ip = await getClientIp();
     const limit = await checkRateLimit(
-      `auth-cookie:POST:${ip}`,
+      buildAuthRateLimitKey({
+        route: "auth-cookie",
+        method: "POST",
+        clientId: ip,
+      }),
       COOKIE_ENDPOINT_LIMIT,
     );
 
     if (!limit.allowed) {
-      console.warn("[AUTH] Cookie endpoint rate limited", { ip });
+      logServerEvent("warn", {
+        route: "/api/auth/cookie",
+        action: "rate-limit",
+        errorCode: "RATE_LIMIT_GLOBAL",
+        details: { ip, method: "POST" },
+      });
       return NextResponse.json(
         { success: false, error: "Too many requests" },
         { status: 429 },
       );
     }
 
-    const { token } = await req.json();
-    if (!token) {
+    const payload = (await req.json()) as { token?: unknown };
+    if (
+      typeof payload !== "object" ||
+      payload === null ||
+      typeof payload.token !== "string" ||
+      payload.token.trim().length === 0
+    ) {
+      logServerEvent("warn", {
+        route: "/api/auth/cookie",
+        action: "validate-payload",
+        errorCode: "INVALID_PAYLOAD",
+        details: { ip, reason: "missing_or_invalid_token" },
+      });
       return NextResponse.json(
-        { success: false, error: "No token provided" },
+        { success: false, error: "Invalid payload" },
         { status: 400 },
       );
     }
 
+    let decodedUid: string | null = null;
+    try {
+      const decoded = await verifyToken(payload.token);
+      decodedUid = decoded.uid;
+    } catch (error) {
+      trackStatusAnomaly("/api/auth/cookie", 401);
+      logServerEvent("warn", {
+        route: "/api/auth/cookie",
+        action: "verify-token",
+        errorCode: "INVALID_TOKEN",
+        details: { ip, reason: error instanceof Error ? error.message : "invalid_token" },
+      });
+      return NextResponse.json(
+        { success: false, error: "Invalid token" },
+        { status: 401 },
+      );
+    }
+
+    if (decodedUid) {
+      const uidLimit = await checkRateLimit(
+        buildAuthRateLimitKey({
+          route: "auth-cookie",
+          method: "POST",
+          clientId: ip,
+          uid: decodedUid,
+        }),
+        COOKIE_ENDPOINT_LIMIT,
+      );
+      if (!uidLimit.allowed) {
+        logServerEvent("warn", {
+          route: "/api/auth/cookie",
+          action: "rate-limit",
+          uid: decodedUid,
+          errorCode: "RATE_LIMIT_UID",
+          details: { ip, method: "POST" },
+        });
+        return NextResponse.json(
+          { success: false, error: "Too many requests" },
+          { status: 429 },
+        );
+      }
+    }
+
     const cookieStore = await cookies();
-    cookieStore.set(AUTH_COOKIE_NAME, token, getAuthCookieOptions());
+    cookieStore.set(AUTH_COOKIE_NAME, payload.token, getAuthCookieOptions());
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[AUTH] Failed to set cookie", {
-      error: error instanceof Error ? error.message : "Unknown error",
+    const isMalformedJsonError = error instanceof SyntaxError;
+    if (isMalformedJsonError) {
+      logServerEvent("warn", {
+        route: "/api/auth/cookie",
+        action: "parse-json",
+        errorCode: "MALFORMED_JSON",
+        details: { ip, reason: error.message },
+      });
+      return NextResponse.json(
+        { success: false, error: "Malformed JSON payload" },
+        { status: 400 },
+      );
+    }
+    trackStatusAnomaly("/api/auth/cookie", 500);
+    captureServerError(error, {
+      route: "/api/auth/cookie",
+      action: "set-cookie",
+      errorCode: "COOKIE_SET_FAILED",
+      details: { ip },
     });
     return NextResponse.json(
       { success: false, error: "Failed to set cookie" },
@@ -53,16 +142,31 @@ export async function POST(req: Request) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(req: Request) {
   try {
-    const ip = await getClientIp();
+    if (!isTrustedMutationRequest(req)) {
+      return NextResponse.json(
+        { success: false, error: "Forbidden origin" },
+        { status: 403 },
+      );
+    }
+    const ip = await getClientIdentifier();
     const limit = await checkRateLimit(
-      `auth-cookie:DELETE:${ip}`,
+      buildAuthRateLimitKey({
+        route: "auth-cookie",
+        method: "DELETE",
+        clientId: ip,
+      }),
       COOKIE_ENDPOINT_LIMIT,
     );
 
     if (!limit.allowed) {
-      console.warn("[AUTH] Cookie delete endpoint rate limited", { ip });
+      logServerEvent("warn", {
+        route: "/api/auth/cookie",
+        action: "rate-limit",
+        errorCode: "RATE_LIMIT_GLOBAL",
+        details: { ip, method: "DELETE" },
+      });
       return NextResponse.json(
         { success: false, error: "Too many requests" },
         { status: 429 },
@@ -73,8 +177,11 @@ export async function DELETE() {
     cookieStore.delete(AUTH_COOKIE_NAME);
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[AUTH] Failed to delete cookie", {
-      error: error instanceof Error ? error.message : "Unknown error",
+    trackStatusAnomaly("/api/auth/cookie", 500);
+    captureServerError(error, {
+      route: "/api/auth/cookie",
+      action: "delete-cookie",
+      errorCode: "COOKIE_DELETE_FAILED",
     });
     return NextResponse.json(
       { success: false, error: "Failed to delete cookie" },

@@ -16,11 +16,12 @@ export function OverviewTab({
   plans,
   recentCheckins,
 }: OverviewTabProps) {
+  const now = new Date();
   const activePlansCount = plans.filter((p) => p.active).length;
   const recentCheckinsCount = recentCheckins.filter((c) => {
     const d = toDate(c.createdAt) ?? c.createdAt;
     if (!d) return false;
-    const days = (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24);
+    const days = (now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24);
     return days <= 7;
   }).length;
 

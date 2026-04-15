@@ -1,15 +1,12 @@
 import {
-  addDoc,
   collection,
-  doc,
-  deleteDoc,
   limit,
   onSnapshot,
   orderBy,
   query,
-  serverTimestamp,
   where,
   type Unsubscribe,
+  type Timestamp,
 } from "firebase/firestore";
 import { getFirestoreDb } from "@/lib/firebase";
 
@@ -18,7 +15,7 @@ export interface Feedback {
   userId: string;
   userName: string | null;
   message: string;
-  createdAt?: any;
+  createdAt?: Timestamp;
 }
 
 function feedbacksCol() {
@@ -34,16 +31,26 @@ export async function createFeedback(params: {
   const message = params.message.trim().slice(0, 64);
   if (!message) return;
 
-  await addDoc(feedbacksCol(), {
-    userId: params.userId,
-    userName: params.userName ?? null,
-    message,
-    createdAt: serverTimestamp(),
+  const response = await fetch("/api/private/feedback", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message,
+      userName: params.userName ?? null,
+    }),
   });
+  if (!response.ok) {
+    throw new Error("Failed to create feedback");
+  }
 }
 
 export async function deleteFeedback(feedbackId: string): Promise<void> {
-  await deleteDoc(doc(getFirestoreDb(), "feedbacks", feedbackId));
+  const response = await fetch(`/api/private/feedback/${feedbackId}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    throw new Error("Failed to delete feedback");
+  }
 }
 
 export function listenMyFeedbacks(
@@ -57,7 +64,7 @@ export function listenMyFeedbacks(
     (snap) => {
       const items: Feedback[] = snap.docs.map((d) => ({
         id: d.id,
-        ...(d.data() as any),
+        ...(d.data() as Omit<Feedback, "id">),
       }));
       items.sort((a, b) => {
         const ta = a.createdAt?.toDate?.()?.getTime?.() ?? 0;
@@ -84,7 +91,7 @@ export function listenPublicFeedbacks(
     (snap) => {
       const items: Feedback[] = snap.docs.map((d) => ({
         id: d.id,
-        ...(d.data() as any),
+        ...(d.data() as Omit<Feedback, "id">),
       }));
       onData(items);
     },
