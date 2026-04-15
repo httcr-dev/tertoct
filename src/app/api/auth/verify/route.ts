@@ -17,7 +17,10 @@ async function getClientIp() {
 export async function POST(req: Request) {
   try {
     const ip = await getClientIp();
-    const limit = checkRateLimit(`auth-verify:POST:${ip}`, VERIFY_ENDPOINT_LIMIT);
+    const limit = await checkRateLimit(
+      `auth-verify:POST:${ip}`,
+      VERIFY_ENDPOINT_LIMIT,
+    );
 
     if (!limit.allowed) {
       console.warn("[AUTH] Verify endpoint rate limited", { ip });

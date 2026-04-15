@@ -1,41 +1,53 @@
-type Bucket = {
-  count: number;
-  resetAt: number;
-};
-
-const buckets = new Map<string, Bucket>();
+import { FieldValue } from "firebase-admin/firestore";
+import { getAdminFirestore } from "./admin";
 
 export type RateLimitOptions = {
   windowMs: number;
   maxRequests: number;
 };
 
-export function checkRateLimit(
+export async function checkRateLimit(
   key: string,
   options: RateLimitOptions,
-): { allowed: boolean; remaining: number; retryAfterMs: number } {
+): Promise<{ allowed: boolean; remaining: number; retryAfterMs: number }> {
   const now = Date.now();
-  const existing = buckets.get(key);
+  const windowStart = Math.floor(now / options.windowMs) * options.windowMs;
+  const resetAt = windowStart + options.windowMs;
+  const docId = `${key}:${windowStart}`;
+  const ref = getAdminFirestore().collection("_rateLimits").doc(docId);
 
-  if (!existing || now >= existing.resetAt) {
-    const next: Bucket = { count: 1, resetAt: now + options.windowMs };
-    buckets.set(key, next);
+  try {
+    const nextCount = await getAdminFirestore().runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const current = snap.exists ? Number(snap.data()?.count ?? 0) : 0;
+      const count = current + 1;
+
+      tx.set(
+        ref,
+        {
+          key,
+          count,
+          windowStart,
+          resetAt,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      return count;
+    });
+
+    return {
+      allowed: nextCount <= options.maxRequests,
+      remaining: Math.max(0, options.maxRequests - nextCount),
+      retryAfterMs: Math.max(0, resetAt - now),
+    };
+  } catch {
+    // Fail-open to avoid auth outage if Firestore rate-limit store is unavailable.
     return {
       allowed: true,
       remaining: options.maxRequests - 1,
       retryAfterMs: options.windowMs,
     };
   }
-
-  existing.count += 1;
-  buckets.set(key, existing);
-
-  const allowed = existing.count <= options.maxRequests;
-  const remaining = Math.max(0, options.maxRequests - existing.count);
-
-  return {
-    allowed,
-    remaining,
-    retryAfterMs: Math.max(0, existing.resetAt - now),
-  };
 }

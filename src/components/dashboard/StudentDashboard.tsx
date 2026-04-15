@@ -7,6 +7,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { Home, List, Users, CheckCircle, LogOut, MessageSquare, Trash2 } from "lucide-react";
 import { BarChart } from "@/components/ui/BarChart";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { PageLoader } from "@/components/ui/PageLoader";
 import { isPaymentOverdue } from "@/lib/utils/payment";
 import { startOfWeek } from "@/lib/utils/date";
 import { createCheckIn, listenCheckinsByUser } from "@/services/checkinService";
@@ -162,13 +163,7 @@ export function StudentDashboard() {
 
   // ── Loading state ────────────────────────────────────────────────────
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-black text-zinc-100">
-        <p className="text-sm text-zinc-400">
-          Carregando seus dados de treino...
-        </p>
-      </div>
-    );
+    return <PageLoader message="Carregando seus dados de treino..." fullScreen={false} />;
   }
 
   // ── Render ───────────────────────────────────────────────────────────

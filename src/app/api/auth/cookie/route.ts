@@ -17,7 +17,10 @@ async function getClientIp() {
 export async function POST(req: Request) {
   try {
     const ip = await getClientIp();
-    const limit = checkRateLimit(`auth-cookie:POST:${ip}`, COOKIE_ENDPOINT_LIMIT);
+    const limit = await checkRateLimit(
+      `auth-cookie:POST:${ip}`,
+      COOKIE_ENDPOINT_LIMIT,
+    );
 
     if (!limit.allowed) {
       console.warn("[AUTH] Cookie endpoint rate limited", { ip });
@@ -53,7 +56,10 @@ export async function POST(req: Request) {
 export async function DELETE() {
   try {
     const ip = await getClientIp();
-    const limit = checkRateLimit(`auth-cookie:DELETE:${ip}`, COOKIE_ENDPOINT_LIMIT);
+    const limit = await checkRateLimit(
+      `auth-cookie:DELETE:${ip}`,
+      COOKIE_ENDPOINT_LIMIT,
+    );
 
     if (!limit.allowed) {
       console.warn("[AUTH] Cookie delete endpoint rate limited", { ip });

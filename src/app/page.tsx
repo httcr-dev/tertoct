@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { PageLoader } from "@/components/ui/PageLoader";
 import type { Plan } from "@/lib/types";
 import { PlansSection } from "@/components/landing/PlansSection";
 import { CoachesSection } from "@/components/landing/CoachesSection";
@@ -16,16 +17,16 @@ import {
 
 export default function Home() {
   const router = useRouter();
-  const { profile, loading, signInWithGoogle } = useAuth();
+  const { firebaseUser, loading, signInWithGoogle } = useAuth();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [coaches, setCoaches] = useState<CoachCardData[]>([]);
   const [loadingLandingData, setLoadingLandingData] = useState(true);
 
   useEffect(() => {
-    if (!loading && profile) {
+    if (!loading && firebaseUser) {
       router.replace("/dashboard");
     }
-  }, [loading, profile, router]);
+  }, [loading, firebaseUser, router]);
 
   useEffect(() => {
     const load = async () => {
@@ -49,19 +50,14 @@ export default function Home() {
   return (
     <div className="relative min-h-screen bg-black text-zinc-50 overflow-hidden font-sans">
       {/* LOADING SCREEN - Show while auth is initializing or redirecting */}
-      {(loading || profile) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">
-          <div className="flex flex-col items-center gap-4">
-            <div className="h-12 w-12 animate-spin rounded-full border-4 border-[#c29b62] border-t-transparent" />
-            <p className="text-sm text-zinc-400">
-              {profile ? "Redirecionando..." : "Carregando..."}
-            </p>
-          </div>
-        </div>
+      {(loading || firebaseUser) && (
+        <PageLoader
+          message={firebaseUser ? "Redirecionando..." : "Carregando..."}
+        />
       )}
 
       {/* Hide content while loading or redirecting */}
-      {!loading && !profile && (
+      {!loading && !firebaseUser && (
         <>
           {/* BACKGROUND IMAGE & OVERLAYS */}
           <div className="fixed inset-0 z-0">

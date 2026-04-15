@@ -176,11 +176,7 @@ service cloud.firestore {
     }
 
     match /checkinCounters/{counterId} {
-      allow read: if isSignedIn() && (
-        counterId.matches('^' + request.auth.uid + '_.*$') ||
-        isCoach() ||
-        isAdmin()
-      );
+      allow read: if isSignedIn();
 
       allow create, update: if isStudent() &&
         request.resource.data.userId == request.auth.uid &&
