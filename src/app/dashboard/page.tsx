@@ -5,24 +5,30 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { CoachDashboard } from "@/components/dashboard/CoachDashboard";
 import { StudentDashboard } from "@/components/dashboard/StudentDashboard";
+import { PageLoader } from "@/components/ui/PageLoader";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { profile, loading } = useAuth();
+  const { firebaseUser, profile, loading } = useAuth();
 
   const role = useMemo(() => profile?.role ?? null, [profile]);
 
   useEffect(() => {
-    if (!loading && !profile) {
+    if (!loading && !firebaseUser) {
       router.replace("/");
     }
-  }, [loading, profile, router]);
+  }, [loading, firebaseUser, router]);
 
   if (loading) {
+    return <PageLoader message="Carregando seu painel..." fullScreen={false} />;
+  }
+
+  if (firebaseUser && !profile) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-black text-zinc-100">
-        <p className="text-sm text-zinc-400">Carregando seu painel...</p>
-      </div>
+      <PageLoader
+        message="Sincronizando seu perfil..."
+        fullScreen={false}
+      />
     );
   }
 

@@ -13,6 +13,7 @@ import { StudentsTab } from "./coach/StudentsTab";
 import { CheckinsTab } from "./coach/CheckinsTab";
 import { ExpirationsTab } from "./coach/ExpirationsTab";
 import { CheckinHistoryModal } from "./coach/CheckinHistoryModal";
+import { PageLoader } from "@/components/ui/PageLoader";
 import {
   createPlan,
   updatePlan,
@@ -65,6 +66,13 @@ export function CoachDashboard() {
   const [checkinCounts, setCheckinCounts] = useState<Map<string, number>>(
     new Map(),
   );
+  const [initialDataLoaded, setInitialDataLoaded] = useState({
+    plans: false,
+    students: false,
+    coaches: false,
+    checkins: false,
+    recent: false,
+  });
 
   const handleTabChange = useCallback((tab: CoachTab) => {
     setSelectedTab(tab);
@@ -73,12 +81,24 @@ export function CoachDashboard() {
 
   // ── Real-time listeners ──────────────────────────────────────────────
   useEffect(() => {
-    const unsubPlans = listenPlans(setPlans);
-    const unsubStudents = listenStudents(setStudents);
-    const unsubProfessors = listenCoaches(setProfessors);
+    const unsubPlans = listenPlans((next) => {
+      setPlans(next);
+      setInitialDataLoaded((prev) => ({ ...prev, plans: true }));
+    });
+    const unsubStudents = listenStudents((next) => {
+      setStudents(next);
+      setInitialDataLoaded((prev) => ({ ...prev, students: true }));
+    });
+    const unsubProfessors = listenCoaches((next) => {
+      setProfessors(next);
+      setInitialDataLoaded((prev) => ({ ...prev, coaches: true }));
+    });
 
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const unsubMonthly = listenCheckinCountsSince(thirtyDaysAgo, setCheckinCounts);
+    const unsubMonthly = listenCheckinCountsSince(thirtyDaysAgo, (counts) => {
+      setCheckinCounts(counts);
+      setInitialDataLoaded((prev) => ({ ...prev, checkins: true }));
+    });
 
     return () => {
       unsubPlans();
@@ -116,10 +136,17 @@ export function CoachDashboard() {
         setRecentCheckins(await fetchRecentCheckinsSince(since));
       } catch {
         setRecentCheckins([]);
+      } finally {
+        setInitialDataLoaded((prev) => ({ ...prev, recent: true }));
       }
     };
     loadRecent();
   }, []);
+
+  const isBootstrapping = useMemo(
+    () => !Object.values(initialDataLoaded).every(Boolean),
+    [initialDataLoaded],
+  );
 
   // ── Plan handlers (delegated to service) ─────────────────────────────
   const scrollToEditPanel = useCallback(() => {
@@ -269,6 +296,10 @@ export function CoachDashboard() {
   );
 
   // ── Render ───────────────────────────────────────────────────────────
+  if (isBootstrapping) {
+    return <PageLoader message="Carregando dados do painel..." fullScreen={false} />;
+  }
+
   return (
     <div className="flex min-h-screen bg-transparent text-zinc-50 selection:bg-amber-500/30">
       {/* Sidebar */}

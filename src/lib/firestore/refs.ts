@@ -5,6 +5,7 @@ export const collections = {
   users: "users",
   plans: "plans",
   checkins: "checkins",
+  checkinCounters: "checkinCounters",
 } as const;
 
 export function usersCol() {
@@ -29,5 +30,9 @@ export function checkinsCol() {
 
 export function checkinDoc(checkinId: string) {
   return doc(getFirestoreDb(), collections.checkins, checkinId);
+}
+
+export function checkinCounterDoc(counterId: string) {
+  return doc(getFirestoreDb(), collections.checkinCounters, counterId);
 }
 
