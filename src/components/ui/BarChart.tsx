@@ -2,11 +2,20 @@
 
 import { useState } from "react";
 
+type ChartTimestampLike = {
+  toDate?: () => Date;
+  seconds?: number;
+};
+
+type ChartDataItem = {
+  createdAt?: Date | number | ChartTimestampLike | null;
+};
+
 export function BarChart({
   dataItems,
   ds = 14,
 }: {
-  dataItems: any[];
+  dataItems: ChartDataItem[];
   ds?: number;
 }) {
   const counts: number[] = Array.from({ length: ds }, () => 0);
@@ -22,14 +31,18 @@ export function BarChart({
   }
 
   for (const item of dataItems) {
-    const d =
-      item.createdAt && item.createdAt.toDate
-        ? item.createdAt.toDate()
-        : item.createdAt
-          ? new Date(
-              (item.createdAt.seconds || item.createdAt.getTime?.() || item.createdAt) * (item.createdAt.seconds ? 1000 : 1),
-            )
-          : null;
+    const createdAt = item.createdAt;
+    let d: Date | null = null;
+    if (createdAt instanceof Date) {
+      d = createdAt;
+    } else if (typeof createdAt === "number") {
+      d = new Date(createdAt);
+    } else if (createdAt && typeof createdAt.toDate === "function") {
+      d = createdAt.toDate();
+    } else if (createdAt && typeof createdAt.seconds === "number") {
+      d = new Date(createdAt.seconds * 1000);
+    }
+
     if (!d) continue;
 
     const diff = Math.floor(

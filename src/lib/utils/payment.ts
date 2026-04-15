@@ -1,4 +1,16 @@
-import type { AppUserProfile } from "@/lib/firebase";
+import type { AppUserProfile, DateLikeTimestamp } from "@/lib/firebase";
+
+function toPaymentDate(value: DateLikeTimestamp): Date | null {
+  if (value instanceof Date) return value;
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  if (typeof value?.toDate === "function") {
+    return value.toDate();
+  }
+  return null;
+}
 
 export function isPaymentOverdue(
   profile: AppUserProfile | null | undefined,
@@ -13,10 +25,8 @@ export function isPaymentOverdue(
 
   if (validUntil) {
     try {
-      const d =
-        typeof validUntil.toDate === "function"
-          ? validUntil.toDate()
-          : new Date(validUntil);
+      const d = toPaymentDate(validUntil);
+      if (!d) return false;
       return now.getTime() > d.getTime();
     } catch {
       // If parsing fails, fall back to the boolean-based rule below.

@@ -4,16 +4,16 @@ import type {
   QueryDocumentSnapshot,
   Timestamp,
 } from "firebase/firestore";
-import type { CheckIn, Plan, AppUserProfile } from "@/lib/types";
+import type { CheckIn, Plan, AppUserProfile, DateLikeTimestamp } from "@/lib/types";
 
 function toDateMaybe(value: unknown): Date | null {
   if (!value) return null;
   if (value instanceof Date) return value;
 
-  const ts = value as Timestamp | { seconds?: number } | undefined;
-  if (typeof (ts as any)?.toDate === "function") return (ts as any).toDate();
-  if (typeof (ts as any)?.seconds === "number") {
-    return new Date((ts as any).seconds * 1000);
+  const ts = value as Timestamp | { seconds?: number; toDate?: () => Date } | undefined;
+  if (typeof ts?.toDate === "function") return ts.toDate();
+  if (typeof ts?.seconds === "number") {
+    return new Date(ts.seconds * 1000);
   }
   return null;
 }
@@ -63,7 +63,7 @@ export function mapUserProfile(
     createdAt: toDateMaybe(data.createdAt),
     paymentDueDay: (data.paymentDueDay as number | null | undefined) ?? null,
     monthlyPaymentPaid: (data.monthlyPaymentPaid as boolean | undefined) ?? false,
-    paymentValidUntil: (data.paymentValidUntil as any | null | undefined) ?? null,
+    paymentValidUntil: (data.paymentValidUntil as DateLikeTimestamp | null | undefined) ?? null,
   };
 }
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
 import { verifyToken } from "@/lib/auth/verifyToken";
+import { getClientIdentifier } from "@/lib/auth/clientIdentifier";
 import { checkRateLimit } from "@/lib/auth/rateLimit";
 
 const VERIFY_ENDPOINT_LIMIT = {
@@ -8,15 +8,9 @@ const VERIFY_ENDPOINT_LIMIT = {
   maxRequests: 10,
 };
 
-async function getClientIp() {
-  const headerStore = await headers();
-  const forwardedFor = headerStore.get("x-forwarded-for");
-  return forwardedFor?.split(",")[0]?.trim() || "unknown";
-}
-
 export async function POST(req: Request) {
   try {
-    const ip = await getClientIp();
+    const ip = await getClientIdentifier();
     const limit = await checkRateLimit(
       `auth-verify:POST:${ip}`,
       VERIFY_ENDPOINT_LIMIT,

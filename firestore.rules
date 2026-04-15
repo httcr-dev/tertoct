@@ -38,6 +38,26 @@ service cloud.firestore {
       ]);
     }
 
+    function isValidSelfUserCreate(userId, data) {
+      return userId == request.auth.uid &&
+        data.role == 'student' &&
+        (!('active' in data) || data.active == true) &&
+        data.keys().hasOnly([
+          'name',
+          'email',
+          'photoURL',
+          'role',
+          'planId',
+          'active',
+          'createdAt'
+        ]);
+    }
+
+    function isPublicCoachProfile(data) {
+      return data.role in ['coach', 'admin'] &&
+        data.keys().hasOnly(['name', 'photoURL', 'role', 'bio']);
+    }
+
     function isStudent() {
       let role = currentRole();
       return role == 'student';
@@ -72,14 +92,14 @@ service cloud.firestore {
     match /users/{userId} {
       // Allow public read access to coach/admin profiles (public-facing),
       // while keeping stricter rules for other user documents.
-      allow read: if resource.data.role in ['coach', 'admin'] || (
+      allow read: if isPublicCoachProfile(resource.data) || (
         isSignedIn() && (
           userId == request.auth.uid ||
           isCoach()
         )
       );
 
-      allow create: if isSignedIn() && userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidSelfUserCreate(userId, request.resource.data);
 
       // Students can update their own profile info.
       // Coaches/admins can update any user.

@@ -4,6 +4,7 @@ import { getAdminFirestore } from "./admin";
 export type RateLimitOptions = {
   windowMs: number;
   maxRequests: number;
+  failOpen?: boolean;
 };
 
 export async function checkRateLimit(
@@ -43,10 +44,18 @@ export async function checkRateLimit(
       retryAfterMs: Math.max(0, resetAt - now),
     };
   } catch {
-    // Fail-open to avoid auth outage if Firestore rate-limit store is unavailable.
+    if (options.failOpen === true) {
+      return {
+        allowed: true,
+        remaining: Math.max(0, options.maxRequests - 1),
+        retryAfterMs: options.windowMs,
+      };
+    }
+
+    // Fail-closed by default for sensitive endpoints.
     return {
-      allowed: true,
-      remaining: options.maxRequests - 1,
+      allowed: false,
+      remaining: 0,
       retryAfterMs: options.windowMs,
     };
   }

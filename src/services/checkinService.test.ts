@@ -5,13 +5,19 @@ const mockCollection = jest.fn().mockReturnValue("checkins-collection-ref");
 const mockQuery = jest.fn().mockReturnValue("checkins-query");
 const mockWhere = jest.fn().mockReturnValue("where-clause");
 const mockServerTimestamp = jest.fn().mockReturnValue("SERVER_TIMESTAMP");
+const mockDoc = jest.fn((_db, col, id) => `${col}/${id ?? "new-id"}`);
+const mockRunTransaction = jest.fn();
+const mockTxGet = jest.fn();
+const mockTxSet = jest.fn();
 
 jest.mock("firebase/firestore", () => ({
-  addDoc: (...args: any[]) => mockAddDoc(...args),
-  collection: (...args: any[]) => mockCollection(...args),
-  getDocs: (...args: any[]) => mockGetDocs(...args),
-  query: (...args: any[]) => mockQuery(...args),
-  where: (...args: any[]) => mockWhere(...args),
+  addDoc: mockAddDoc,
+  collection: mockCollection,
+  doc: mockDoc,
+  getDocs: mockGetDocs,
+  query: mockQuery,
+  runTransaction: mockRunTransaction,
+  where: mockWhere,
   serverTimestamp: () => mockServerTimestamp(),
 }));
 
@@ -25,18 +31,34 @@ import { createCheckIn, fetchCheckinsByUser } from "./checkinService";
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockRunTransaction.mockImplementation(async (_db, callback) =>
+    callback({
+      get: mockTxGet,
+      set: mockTxSet,
+    }),
+  );
 });
 
 describe("createCheckIn", () => {
-  it("calls addDoc with userId, planId, and serverTimestamp", async () => {
+  it("creates check-in and increments counter in a transaction", async () => {
+    mockTxGet
+      .mockResolvedValueOnce({
+        exists: () => true,
+        data: () => ({ planId: "plan-1" }),
+      })
+      .mockResolvedValueOnce({
+        exists: () => true,
+        data: () => ({ active: true, classesPerWeek: 3 }),
+      })
+      .mockResolvedValueOnce({
+        exists: () => true,
+        data: () => ({ count: 0 }),
+      });
+
     await createCheckIn("user-1", "plan-1");
 
-    expect(mockCollection).toHaveBeenCalledWith("mock-db", "checkins");
-    expect(mockAddDoc).toHaveBeenCalledWith("checkins-collection-ref", {
-      userId: "user-1",
-      planId: "plan-1",
-      createdAt: "SERVER_TIMESTAMP",
-    });
+    expect(mockRunTransaction).toHaveBeenCalled();
+    expect(mockTxSet).toHaveBeenCalledTimes(2);
   });
 });
 

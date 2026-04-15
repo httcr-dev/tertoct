@@ -7,6 +7,9 @@ import {
   type Unsubscribe,
   where,
   serverTimestamp,
+  type QuerySnapshot,
+  type QueryDocumentSnapshot,
+  type DocumentData,
 } from "firebase/firestore";
 import type { CheckIn } from "@/lib/types";
 import { checkinCounterDoc, checkinsCol, planDoc, userDoc } from "@/lib/firestore/refs";
@@ -83,10 +86,11 @@ export async function fetchCheckinsByUser(
   const q = query(checkinsCol(), where("userId", "==", userId));
   const snap = await getDocs(q);
   const history: CheckIn[] = [];
-  if ("docs" in snap && Array.isArray((snap as any).docs)) {
-    history.push(...(snap as any).docs.map(mapCheckin));
-  } else if ("forEach" in snap && typeof (snap as any).forEach === "function") {
-    (snap as any).forEach((d: any) => {
+  const maybeSnap = snap as Partial<QuerySnapshot<DocumentData>>;
+  if (Array.isArray(maybeSnap.docs)) {
+    history.push(...maybeSnap.docs.map(mapCheckin));
+  } else if (typeof maybeSnap.forEach === "function") {
+    maybeSnap.forEach((d: QueryDocumentSnapshot<DocumentData>) => {
       history.push(mapCheckin(d));
     });
   }

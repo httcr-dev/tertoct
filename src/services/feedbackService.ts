@@ -10,6 +10,7 @@ import {
   serverTimestamp,
   where,
   type Unsubscribe,
+  type Timestamp,
 } from "firebase/firestore";
 import { getFirestoreDb } from "@/lib/firebase";
 
@@ -18,7 +19,7 @@ export interface Feedback {
   userId: string;
   userName: string | null;
   message: string;
-  createdAt?: any;
+  createdAt?: Timestamp;
 }
 
 function feedbacksCol() {
@@ -57,7 +58,7 @@ export function listenMyFeedbacks(
     (snap) => {
       const items: Feedback[] = snap.docs.map((d) => ({
         id: d.id,
-        ...(d.data() as any),
+        ...(d.data() as Omit<Feedback, "id">),
       }));
       items.sort((a, b) => {
         const ta = a.createdAt?.toDate?.()?.getTime?.() ?? 0;
@@ -84,7 +85,7 @@ export function listenPublicFeedbacks(
     (snap) => {
       const items: Feedback[] = snap.docs.map((d) => ({
         id: d.id,
-        ...(d.data() as any),
+        ...(d.data() as Omit<Feedback, "id">),
       }));
       onData(items);
     },

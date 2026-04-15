@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { AUTH_COOKIE_NAME, getAuthCookieOptions } from "@/lib/auth/cookies";
+import { getClientIdentifier } from "@/lib/auth/clientIdentifier";
 import { checkRateLimit } from "@/lib/auth/rateLimit";
 
 const COOKIE_ENDPOINT_LIMIT = {
@@ -8,15 +9,9 @@ const COOKIE_ENDPOINT_LIMIT = {
   maxRequests: 20,
 };
 
-async function getClientIp() {
-  const headerStore = await headers();
-  const forwardedFor = headerStore.get("x-forwarded-for");
-  return forwardedFor?.split(",")[0]?.trim() || "unknown";
-}
-
 export async function POST(req: Request) {
   try {
-    const ip = await getClientIp();
+    const ip = await getClientIdentifier();
     const limit = await checkRateLimit(
       `auth-cookie:POST:${ip}`,
       COOKIE_ENDPOINT_LIMIT,
@@ -55,7 +50,7 @@ export async function POST(req: Request) {
 
 export async function DELETE() {
   try {
-    const ip = await getClientIp();
+    const ip = await getClientIdentifier();
     const limit = await checkRateLimit(
       `auth-cookie:DELETE:${ip}`,
       COOKIE_ENDPOINT_LIMIT,
