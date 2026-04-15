@@ -31,6 +31,11 @@ import { createCheckIn, fetchCheckinsByUser } from "./checkinService";
 
 beforeEach(() => {
   jest.clearAllMocks();
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({}),
+  }) as unknown as typeof fetch;
   mockRunTransaction.mockImplementation(async (_db, callback) =>
     callback({
       get: mockTxGet,
@@ -40,25 +45,13 @@ beforeEach(() => {
 });
 
 describe("createCheckIn", () => {
-  it("creates check-in and increments counter in a transaction", async () => {
-    mockTxGet
-      .mockResolvedValueOnce({
-        exists: () => true,
-        data: () => ({ planId: "plan-1" }),
-      })
-      .mockResolvedValueOnce({
-        exists: () => true,
-        data: () => ({ active: true, classesPerWeek: 3 }),
-      })
-      .mockResolvedValueOnce({
-        exists: () => true,
-        data: () => ({ count: 0 }),
-      });
-
+  it("creates check-in through private API", async () => {
     await createCheckIn("user-1", "plan-1");
 
-    expect(mockRunTransaction).toHaveBeenCalled();
-    expect(mockTxSet).toHaveBeenCalledTimes(2);
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/private/checkins",
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 });
 

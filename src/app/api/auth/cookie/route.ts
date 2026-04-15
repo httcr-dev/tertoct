@@ -5,6 +5,7 @@ import { getClientIdentifier } from "@/lib/auth/clientIdentifier";
 import { checkRateLimit } from "@/lib/auth/rateLimit";
 import { verifyToken } from "@/lib/auth/verifyToken";
 import { buildAuthRateLimitKey } from "@/lib/auth/rateLimitKey";
+import { isTrustedMutationRequest } from "@/lib/security/origin";
 import {
   captureServerError,
   logServerEvent,
@@ -17,6 +18,12 @@ const COOKIE_ENDPOINT_LIMIT = {
 };
 
 export async function POST(req: Request) {
+  if (!isTrustedMutationRequest(req)) {
+    return NextResponse.json(
+      { success: false, error: "Forbidden origin" },
+      { status: 403 },
+    );
+  }
   const ip = await getClientIdentifier();
   try {
     const limit = await checkRateLimit(
@@ -135,8 +142,14 @@ export async function POST(req: Request) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(req: Request) {
   try {
+    if (!isTrustedMutationRequest(req)) {
+      return NextResponse.json(
+        { success: false, error: "Forbidden origin" },
+        { status: 403 },
+      );
+    }
     const ip = await getClientIdentifier();
     const limit = await checkRateLimit(
       buildAuthRateLimitKey({

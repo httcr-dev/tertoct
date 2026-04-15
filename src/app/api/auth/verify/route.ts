@@ -3,6 +3,9 @@ import { verifyToken } from "@/lib/auth/verifyToken";
 import { getClientIdentifier } from "@/lib/auth/clientIdentifier";
 import { checkRateLimit } from "@/lib/auth/rateLimit";
 import { buildAuthRateLimitKey } from "@/lib/auth/rateLimitKey";
+import { validateBody } from "@/lib/validations/validateRoute";
+import { z } from "zod";
+import { isTrustedMutationRequest } from "@/lib/security/origin";
 import {
   captureServerError,
   logServerEvent,
@@ -13,8 +16,14 @@ const VERIFY_ENDPOINT_LIMIT = {
   windowMs: 60_000,
   maxRequests: 10,
 };
+const verifyPayloadSchema = z.object({
+  token: z.string().trim().min(1),
+});
 
 export async function POST(req: Request) {
+  if (!isTrustedMutationRequest(req)) {
+    return NextResponse.json({ valid: false, error: "Forbidden origin" }, { status: 403 });
+  }
   try {
     const ip = await getClientIdentifier();
     const limit = await checkRateLimit(
@@ -39,13 +48,13 @@ export async function POST(req: Request) {
       );
     }
 
-    const { token } = await req.json();
-
-    if (!token) {
-      return NextResponse.json({ valid: false, error: "No token" }, { status: 400 });
+    const { data: payload, errorResponse } = await validateBody(req, verifyPayloadSchema);
+    if (errorResponse) return errorResponse;
+    if (!payload) {
+      return NextResponse.json({ valid: false, error: "Invalid payload" }, { status: 400 });
     }
 
-    const decoded = await verifyToken(token, { checkRevoked: true });
+    const decoded = await verifyToken(payload.token, { checkRevoked: true });
     const uidLimit = await checkRateLimit(
       buildAuthRateLimitKey({
         route: "auth-verify",

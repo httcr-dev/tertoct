@@ -111,8 +111,7 @@ service cloud.firestore {
     match /publicProfiles/{userId} {
       allow read: if true;
       allow create, update: if isSignedIn() && (
-        userId == request.auth.uid ||
-        isCoach() ||
+        (userId == request.auth.uid && isCoach()) ||
         isAdmin()
       ) && isPublicCoachProfile(request.resource.data);
       allow delete: if false;
@@ -186,7 +185,11 @@ service cloud.firestore {
     }
 
     match /checkinCounters/{counterId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        isCoach() ||
+        isAdmin()
+      );
 
       allow create, update: if isStudent() &&
         request.resource.data.userId == request.auth.uid &&
@@ -226,12 +229,12 @@ service cloud.firestore {
 
     // Future collections (classes, enrollments, payments) can be refined later.
     match /classes/{classId} {
-      allow read: if isSignedIn();
+      allow read: if isCoach();
       allow create, update, delete: if isCoach();
     }
 
     match /enrollments/{id} {
-      allow read: if isSignedIn();
+      allow read: if isCoach();
       allow create, update, delete: if isCoach();
     }
 

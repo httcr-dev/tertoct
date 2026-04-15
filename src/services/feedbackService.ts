@@ -1,13 +1,9 @@
 import {
-  addDoc,
   collection,
-  doc,
-  deleteDoc,
   limit,
   onSnapshot,
   orderBy,
   query,
-  serverTimestamp,
   where,
   type Unsubscribe,
   type Timestamp,
@@ -35,16 +31,26 @@ export async function createFeedback(params: {
   const message = params.message.trim().slice(0, 64);
   if (!message) return;
 
-  await addDoc(feedbacksCol(), {
-    userId: params.userId,
-    userName: params.userName ?? null,
-    message,
-    createdAt: serverTimestamp(),
+  const response = await fetch("/api/private/feedback", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message,
+      userName: params.userName ?? null,
+    }),
   });
+  if (!response.ok) {
+    throw new Error("Failed to create feedback");
+  }
 }
 
 export async function deleteFeedback(feedbackId: string): Promise<void> {
-  await deleteDoc(doc(getFirestoreDb(), "feedbacks", feedbackId));
+  const response = await fetch(`/api/private/feedback/${feedbackId}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    throw new Error("Failed to delete feedback");
+  }
 }
 
 export function listenMyFeedbacks(

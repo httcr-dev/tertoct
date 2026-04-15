@@ -46,6 +46,7 @@ export function listenCoaches(onData: (coaches: StudentSummary[]) => void): Unsu
       return {
         id: docSnap.id,
         name: data.name ?? null,
+        email: data.email ?? null,
         photoURL: data.photoURL ?? null,
         weeklyCheckIns: 0,
         ...(data.active !== undefined ? { active: !!data.active } : {}),
