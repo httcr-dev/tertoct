@@ -9,7 +9,7 @@ import {
 } from "@/lib/observability/serverObservability";
 
 function generateNonce(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return crypto.randomUUID();
 }
 
 function buildCsp(nonce: string): string {
@@ -118,3 +118,7 @@ export async function proxy(req: NextRequest) {
     return unauthenticatedResponse(req, nonce);
   }
 }
+
+export const config = {
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)"],
+};
