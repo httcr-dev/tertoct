@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 interface CoachCardData {
   id: string;
   name: string | null;
@@ -39,11 +41,14 @@ export function CoachesSection({ coaches }: CoachesSectionProps) {
             {/* Avatar */}
             <div className="relative mb-5 flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-2 border-[#c29b62]/60 bg-gradient-to-br from-zinc-800 to-zinc-900 text-2xl font-black uppercase text-[#c29b62] shadow-[0_0_20px_rgba(194,155,98,0.2)] transition-shadow duration-500 group-hover:shadow-[0_0_30px_rgba(194,155,98,0.35)]">
               {coach.photoURL ? (
-                <img
+                <Image
                   src={coach.photoURL}
                   alt={coach.name || ""}
+                  width={96}
+                  height={96}
                   className="block h-full w-full object-cover"
                   referrerPolicy="no-referrer"
+                  unoptimized
                 />
               ) : (
                 coach.name

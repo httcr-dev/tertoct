@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { StudentSummary, Plan } from "@/lib/types";
 import { Users } from "lucide-react";
 
@@ -128,11 +129,14 @@ export function StudentsTab({
                   <div className="relative shrink-0">
                     <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl border border-zinc-700/50 bg-zinc-800 font-bold text-zinc-300 shadow-inner">
                       {student.photoURL ? (
-                        <img
+                        <Image
                           src={student.photoURL}
                           alt={student.name || ""}
+                          width={48}
+                          height={48}
                           className="block h-full w-full object-cover transition-transform group-hover:scale-110"
                           referrerPolicy="no-referrer"
+                          unoptimized
                         />
                       ) : student.name ? (
                         student.name.charAt(0).toUpperCase()

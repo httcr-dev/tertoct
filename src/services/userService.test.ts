@@ -55,7 +55,7 @@ describe("togglePayment", () => {
 
 describe("toggleUserActive", () => {
   it("calls API for active toggle", async () => {
-    await toggleUserActive("student-1", true);
+    await toggleUserActive("student-1");
     expect(global.fetch).toHaveBeenCalled();
   });
 });

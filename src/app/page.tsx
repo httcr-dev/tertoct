@@ -79,10 +79,12 @@ export default function Home() {
             {/* HEADER */}
             <header className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <img
+                <Image
                   src="/logo-academy.png"
                   alt="TertoCT Logo"
-                  className="h-10 w-10 object-contain"
+                  width={40}
+                  height={40}
+                  className="object-contain"
                 />
                 <span className="font-bold text-zinc-100 tracking-wide text-2xl">
                   TertoCT

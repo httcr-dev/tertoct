@@ -1,6 +1,6 @@
 "use client";
 
-import { List, CheckCircle } from "lucide-react";
+import { CheckCircle } from "lucide-react";
 import { Plan } from "@/lib/types";
 import React from "react";
 

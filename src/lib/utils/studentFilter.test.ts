@@ -1,4 +1,4 @@
-import { filterStudents, type FilterParams } from "./studentFilter";
+import { filterStudents } from "./studentFilter";
 import type { StudentSummary } from "@/lib/types";
 
 const makeStudent = (overrides: Partial<StudentSummary> = {}): StudentSummary => ({

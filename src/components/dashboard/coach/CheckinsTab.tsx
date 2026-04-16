@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { BarChart } from "@/components/ui/BarChart";
 import { StudentSummary, Plan, CheckIn } from "@/lib/types";
 import { toDate } from "@/lib/utils/date";
@@ -132,11 +133,14 @@ export function CheckinsTab({
                 <div className="flex items-center gap-4">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-amber-500/20 bg-amber-500/10 font-medium text-amber-500 shadow-sm shadow-amber-500/20 transition-transform group-hover:scale-110">
                     {student?.photoURL ? (
-                      <img
+                      <Image
                         src={student.photoURL}
                         alt={student.name || ""}
+                        width={40}
+                        height={40}
                         className="block h-full w-full object-cover"
                         referrerPolicy="no-referrer"
+                        unoptimized
                       />
                     ) : student?.name ? (
                       student.name.charAt(0).toUpperCase()

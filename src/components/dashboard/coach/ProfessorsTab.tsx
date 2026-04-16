@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Users } from "lucide-react";
 import { StudentSummary } from "@/lib/types";
 
@@ -52,11 +53,14 @@ export function ProfessorsTab({
                     <div className="flex items-center gap-3">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-zinc-700/50 bg-zinc-800 text-zinc-400 shadow-sm shadow-amber-500/10">
                         {professor.photoURL ? (
-                          <img
+                          <Image
                             src={professor.photoURL}
                             alt={professor.name || ""}
+                            width={40}
+                            height={40}
                             className="block h-full w-full object-cover"
                             referrerPolicy="no-referrer"
+                            unoptimized
                           />
                         ) : (
                           <Users className="h-5 w-5" />

@@ -76,10 +76,9 @@ export function ExpirationsTab({
     return new Date(targetYear, targetMonth, day);
   };
 
-  const today = new Date();
-  const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-
   const processedStudents = useMemo(() => {
+    const today = new Date();
+    const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     return students
       .filter((s) => s.active !== false && s.paymentDueDay) // Only active students with due days
       .map((s) => {
@@ -116,7 +115,7 @@ export function ExpirationsTab({
         if (!b.dueDate) return -1;
         return a.dueDate.getTime() - b.dueDate.getTime();
       });
-  }, [students, todayOnly, phoneInputs]);
+  }, [students, phoneInputs]);
 
   const filteredStudents = useMemo(() => {
     let list = processedStudents;

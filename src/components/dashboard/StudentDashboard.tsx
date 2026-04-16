@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Plan, CheckIn } from "@/lib/types";
 import { useAuth } from "../auth/AuthProvider";
-import { Home, List, Users, CheckCircle, LogOut, MessageSquare, Trash2 } from "lucide-react";
+import Image from "next/image";
+import { Home, List, CheckCircle, LogOut, MessageSquare, Trash2 } from "lucide-react";
 import { BarChart } from "@/components/ui/BarChart";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { PageLoader } from "@/components/ui/PageLoader";
@@ -173,10 +174,12 @@ export function StudentDashboard() {
       <aside className="w-64 flex-shrink-0 border-r border-zinc-800/40 bg-black/40 backdrop-blur-2xl p-6 lg:flex flex-col hidden md:flex">
         <div className="mb-10 px-2 mt-2">
           <div className="flex items-center gap-3">
-            <img
+            <Image
               src="/logo-academy.png"
               alt="TertoCT Logo"
-              className="h-10 w-10 object-contain"
+              width={40}
+              height={40}
+              className="object-contain"
             />
             <span className="font-semibold text-zinc-100 tracking-wide text-lg">
               TertoCT
@@ -242,11 +245,14 @@ export function StudentDashboard() {
               </p>
               <h1 className="text-xl font-bold text-zinc-50 flex items-center gap-3">
                 {profile?.photoURL && (
-                  <img
+                  <Image
                     src={profile.photoURL}
                     alt={profile.name || ""}
+                    width={32}
+                    height={32}
                     className="h-8 w-8 rounded-full object-cover border border-zinc-700/50 shadow-sm shadow-amber-500/20 block"
                     referrerPolicy="no-referrer"
+                    unoptimized
                   />
                 )}
                 Olá, {profile?.name?.split(" ")[0] ?? "aluno"}.

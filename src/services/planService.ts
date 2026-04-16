@@ -1,11 +1,4 @@
-import {
-  getDocs,
-  limit,
-  query,
-  where,
-} from "firebase/firestore";
 import type { Plan } from "@/lib/types";
-import { usersCol } from "@/lib/firestore/refs";
 
 export class PlanInUseError extends Error {
   constructor() {

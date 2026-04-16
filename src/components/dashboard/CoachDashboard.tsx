@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { CheckIn, Plan, StudentSummary } from "@/lib/types";
@@ -121,14 +122,6 @@ export function CoachDashboard() {
     [students, checkinCounts],
   );
 
-  const professorsWithCounts = useMemo(
-    () =>
-      professors.map((p) => ({
-        ...p,
-        weeklyCheckIns: checkinCounts.get(p.id) ?? 0,
-      })),
-    [professors, checkinCounts],
-  );
 
   // Recent checkins for overview chart
   useEffect(() => {
@@ -216,7 +209,7 @@ export function CoachDashboard() {
 
       setEditingPlan(null);
       setEditingFields({});
-    } catch (err) {
+    } catch {
       console.error("Failed to save plan");
     }
   }, [editingPlan, editingFields]);
@@ -298,7 +291,7 @@ export function CoachDashboard() {
           success: "Status alterado com sucesso!",
           error: "Erro ao alterar status",
         });
-      } catch (err) {
+      } catch {
         console.error("Failed to toggle student active");
       }
     },
@@ -313,7 +306,7 @@ export function CoachDashboard() {
     try {
       const history = await fetchCheckinsByUser(student.id, { lastDays: 15 });
       setCheckinHistory(history);
-    } catch (err) {
+    } catch {
       console.error("Failed to fetch check-in history");
       setCheckinHistory([]);
     }
@@ -342,10 +335,12 @@ export function CoachDashboard() {
       <aside className="w-64 flex-shrink-0 border-r border-zinc-800/40 bg-black/20 backdrop-blur-xl p-6 hidden md:flex flex-col">
         <div className="mb-10 px-2 mt-2">
           <div className="flex items-center gap-3">
-            <img
+            <Image
               src="/logo-academy.png"
               alt="TertoCT Logo"
-              className="h-10 w-10 object-contain"
+              width={40}
+              height={40}
+              className="object-contain"
             />
             <span className="font-semibold text-zinc-100 tracking-wide text-lg">
               TertoCT
@@ -415,11 +410,14 @@ export function CoachDashboard() {
               <div className="flex items-center gap-3">
                 <div className="h-8 w-8 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-300 text-xs font-semibold overflow-hidden border border-zinc-700/50 shadow-sm shadow-amber-500/10 shrink-0">
                   {profile?.photoURL ? (
-                    <img
+                    <Image
                       src={profile.photoURL}
                       alt={profile.name || ""}
+                      width={32}
+                      height={32}
                       className="w-full h-full object-cover block"
                       referrerPolicy="no-referrer"
+                      unoptimized
                     />
                   ) : profile?.name ? (
                     profile.name.charAt(0).toUpperCase()
