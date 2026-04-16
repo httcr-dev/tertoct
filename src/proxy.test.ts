@@ -31,40 +31,37 @@ function makeRequest(pathname: string, token?: string) {
   } as any;
 }
 
-describe("proxy", () => {
+describe("middleware", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockIsAuthorizedForPath.mockReturnValue(true);
   });
 
   it("returns 401 for protected API without cookie", async () => {
-    const { proxy } = await import("./proxy");
-    const response = await proxy(makeRequest("/api/private/admin/resource"));
+    const { middleware } = await import("./proxy");
+    const response = await middleware(makeRequest("/api/private/admin/resource"));
 
     expect(response.status).toBe(401);
-    expect(response.headers.get("Content-Security-Policy")).toContain(
-      "script-src 'self' 'nonce-",
-    );
     expect(response.headers.get("Content-Security-Policy")).toContain(
       "'unsafe-inline'",
     );
   });
 
   it("redirects page request without cookie to home", async () => {
-    const { proxy } = await import("./proxy");
-    const response = await proxy(makeRequest("/dashboard"));
+    const { middleware } = await import("./proxy");
+    const response = await middleware(makeRequest("/dashboard"));
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("https://test.local/");
     expect(response.headers.get("Content-Security-Policy")).toContain(
-      "script-src 'self' 'nonce-",
+      "'unsafe-inline'",
     );
   });
 
   it("returns 401 for invalid/revoked token", async () => {
     mockVerifyToken.mockRejectedValueOnce(new Error("revoked"));
-    const { proxy } = await import("./proxy");
-    const response = await proxy(
+    const { middleware } = await import("./proxy");
+    const response = await middleware(
       makeRequest("/api/private/coach/resource", "bad-token"),
     );
 
@@ -75,8 +72,8 @@ describe("proxy", () => {
   it("returns 403 when role is insufficient", async () => {
     mockVerifyToken.mockResolvedValueOnce({ uid: "u1", role: "student" });
     mockIsAuthorizedForPath.mockReturnValueOnce(false);
-    const { proxy } = await import("./proxy");
-    const response = await proxy(
+    const { middleware } = await import("./proxy");
+    const response = await middleware(
       makeRequest("/api/private/admin/resource", "valid-token"),
     );
 
@@ -87,8 +84,8 @@ describe("proxy", () => {
   it("redirects page request with insufficient role to dashboard", async () => {
     mockVerifyToken.mockResolvedValueOnce({ uid: "u1", role: "student" });
     mockIsAuthorizedForPath.mockReturnValueOnce(false);
-    const { proxy } = await import("./proxy");
-    const response = await proxy(
+    const { middleware } = await import("./proxy");
+    const response = await middleware(
       makeRequest("/dashboard/admin", "valid-token"),
     );
 
@@ -99,13 +96,13 @@ describe("proxy", () => {
   });
 
   it("adds nonce CSP on non-protected routes", async () => {
-    const { proxy } = await import("./proxy");
-    const response = await proxy(makeRequest("/"));
+    const { middleware } = await import("./proxy");
+    const response = await middleware(makeRequest("/"));
 
     expect(response.status).toBe(200);
     expect(response.headers.get("x-nonce")).toBeTruthy();
     expect(response.headers.get("Content-Security-Policy")).toContain(
-      "script-src 'self' 'nonce-",
+      "'unsafe-inline'",
     );
   });
 });
