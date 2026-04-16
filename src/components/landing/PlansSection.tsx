@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import type { Plan } from "@/lib/types";
 
 interface PlansSectionProps {
@@ -8,6 +9,55 @@ interface PlansSectionProps {
 }
 
 export function PlansSection({ plans, loadingLandingData }: PlansSectionProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (plans.length === 0 || loadingLandingData) return;
+
+    let intervalId: NodeJS.Timeout;
+
+    const startScroll = () => {
+      intervalId = setInterval(() => {
+        if (!scrollRef.current) return;
+        const container = scrollRef.current;
+
+        // Verifica se chegou ao final (adicionando uma pequena margem de erro)
+        const isAtEnd = container.scrollLeft + container.clientWidth >= container.scrollWidth - 20;
+
+        if (isAtEnd) {
+          // Volta para o primeiro plano
+          container.scrollTo({ left: 0, behavior: "smooth" });
+        } else {
+          // Avança aproximadamente um cartão, o snap resolve o resto
+          container.scrollBy({ left: 300, behavior: "smooth" });
+        }
+      }, 3000);
+    };
+
+    startScroll();
+
+    const handlePause = () => clearInterval(intervalId);
+    const handleResume = () => startScroll();
+
+    const el = scrollRef.current;
+    if (el) {
+      el.addEventListener("mouseenter", handlePause);
+      el.addEventListener("mouseleave", handleResume);
+      el.addEventListener("touchstart", handlePause, { passive: true });
+      el.addEventListener("touchend", handleResume, { passive: true });
+    }
+
+    return () => {
+      clearInterval(intervalId);
+      if (el) {
+        el.removeEventListener("mouseenter", handlePause);
+        el.removeEventListener("mouseleave", handleResume);
+        el.removeEventListener("touchstart", handlePause);
+        el.removeEventListener("touchend", handleResume);
+      }
+    };
+  }, [plans.length, loadingLandingData]);
+
   return (
     <section id="plans" className="mt-32 flex w-full flex-col items-center">
       <p className="mb-3 text-sm font-bold uppercase tracking-[0.25em] text-[#c29b62]">
@@ -21,7 +71,10 @@ export function PlansSection({ plans, loadingLandingData }: PlansSectionProps) {
         e desempenho.
       </p>
 
-      <div className="flex w-full flex-wrap justify-center gap-8">
+      <div
+        ref={scrollRef}
+        className="flex w-full snap-x snap-mandatory gap-6 overflow-x-auto pb-12 pt-4 px-4 sm:gap-8 sm:px-8 max-w-7xl mx-auto scroll-smooth [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+      >
         {loadingLandingData ? (
           <div className="flex w-full items-center justify-center py-16">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#c29b62] border-t-transparent" />
@@ -30,7 +83,7 @@ export function PlansSection({ plans, loadingLandingData }: PlansSectionProps) {
           plans.map((plan, index) => (
             <div
               key={plan.id}
-              className="group relative flex w-full max-w-sm flex-col rounded-2xl border border-[#c29b62]/20 bg-gradient-to-br from-zinc-900/90 via-zinc-900/70 to-black/90 p-8 backdrop-blur-xl transition-all duration-500 hover:-translate-y-1 hover:border-[#c29b62]/60 hover:shadow-[0_0_40px_rgba(194,155,98,0.15)]"
+              className="group relative flex w-[85vw] shrink-0 snap-center sm:w-[360px] flex-col rounded-2xl border border-[#c29b62]/20 bg-gradient-to-br from-zinc-900/90 via-zinc-900/70 to-black/90 p-8 backdrop-blur-xl transition-all duration-500 hover:-translate-y-1 hover:border-[#c29b62]/60 hover:shadow-[0_0_40px_rgba(194,155,98,0.15)]"
               style={{ animationDelay: `${index * 100}ms` }}
             >
               {/* Glow effect */}
@@ -52,8 +105,8 @@ export function PlansSection({ plans, loadingLandingData }: PlansSectionProps) {
                   <span className="mt-2 self-start text-sm font-semibold text-[#c29b62]">
                     R$
                   </span>
-                  <span className="bg-gradient-to-r from-[#e6c687] via-[#c29b62] to-[#9c753b] bg-clip-text text-5xl font-black text-transparent">
-                    {Math.floor(plan.price)}
+                  <span className="text-5xl font-black text-[#c29b62]">
+                    {Math.floor(plan.price || 0)}
                   </span>
                   <span className="text-base font-medium text-zinc-500">
                     /mês
@@ -124,7 +177,7 @@ export function PlansSection({ plans, loadingLandingData }: PlansSectionProps) {
             ].map((item, i) => (
               <div
                 key={i}
-                className="group relative flex w-full max-w-sm flex-col items-center rounded-2xl border border-[#c29b62]/15 bg-gradient-to-br from-zinc-900/80 to-black/80 p-10 text-center backdrop-blur-xl transition-all duration-500 hover:border-[#c29b62]/40 hover:shadow-[0_0_30px_rgba(194,155,98,0.1)]"
+                className="group relative flex w-[85vw] shrink-0 snap-center sm:w-[360px] flex-col items-center rounded-2xl border border-[#c29b62]/15 bg-gradient-to-br from-zinc-900/80 to-black/80 p-10 text-center backdrop-blur-xl transition-all duration-500 hover:border-[#c29b62]/40 hover:shadow-[0_0_30px_rgba(194,155,98,0.1)]"
               >
                 <div className="mb-6 rounded-full border border-[#c29b62]/30 bg-[#c29b62]/10 p-4 text-[#c29b62]">
                   <svg

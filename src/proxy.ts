@@ -13,15 +13,46 @@ function generateNonce(): string {
 }
 
 function buildCsp(nonce: string): string {
+  const isDev = process.env.NODE_ENV !== "production";
+
+  // script-src:
+  // - Production: nonce-only (strict). Next.js will propagate the nonce to its own inline scripts.
+  // - Development: no nonce in script-src because CSP3 silently ignores 'unsafe-inline' when a
+  //   nonce is present, and Next.js HMR / Turbopack inject many unonced inline scripts.
+  //   In dev we rely on 'unsafe-inline' + 'unsafe-eval' + explicit origin allowlists instead.
+  const scriptSrc = isDev
+    ? [
+        `'self'`,
+        `'unsafe-inline'`,
+        `'unsafe-eval'`,
+        `https://apis.google.com`,
+        `https://accounts.google.com`,
+      ].join(" ")
+    : [
+        `'self'`,
+        `'nonce-${nonce}'`,
+        `https://apis.google.com`,
+        `https://accounts.google.com`,
+      ].join(" ");
+
+  // style-src: Next.js, Google Fonts and various dev-tool packages inject inline styles
+  // that don't carry the page nonce. 'unsafe-inline' is the pragmatic choice here;
+  // the nonce fallback is overridden by it only in older browsers.
+  const styleSrc = `'self' 'unsafe-inline' https://fonts.googleapis.com`;
+
   return [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}'`,
-    `style-src 'self' 'nonce-${nonce}'`,
+    `script-src ${scriptSrc}`,
+    `style-src ${styleSrc}`,
     "img-src 'self' data: https:",
+    // Firebase Auth popup needs to post messages and load iframes from Google origins.
     "connect-src 'self' https:",
+    "frame-src https://accounts.google.com https://*.firebaseapp.com",
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
+    // Allow Google Fonts stylesheets and woff2 files.
+    "font-src 'self' data: https://fonts.gstatic.com",
   ].join("; ");
 }
 

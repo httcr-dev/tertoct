@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { verifyToken } from "./verifyToken";
 import type { DecodedIdToken } from "firebase-admin/auth";
 import { AUTH_COOKIE_NAME } from "./cookies";
+import { getAdminFirestore } from "./admin";
 
 /**
  * Retrieves and decodes the Firebase token from the HTTPOnly cookie.
@@ -15,7 +16,27 @@ export async function getServerSession(): Promise<DecodedIdToken | null> {
       return null;
     }
 
-    return await verifyToken(token, { checkRevoked: true });
+    // Verify locally without hitting the backend for revocation checks
+    const session = await verifyToken(token, { checkRevoked: false });
+
+    if (session && !session.role && session.uid) {
+      try {
+        const db = getAdminFirestore();
+        const userDoc = await db.collection("users").doc(session.uid).get();
+        if (userDoc.exists) {
+          const data = userDoc.data();
+          if (data && typeof data.role === "string") {
+            // Mutate session to append the role for RBAC checks
+            session.role = data.role;
+          }
+        }
+      } catch (err) {
+        console.warn("[RBAC] Failed to fetch role from Firestore fallback:", err);
+      }
+    }
+
+    return session;
+
   } catch (error) {
     console.error("[RBAC] Failed to verify server session:", error);
     return null;

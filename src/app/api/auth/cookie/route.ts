@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { AUTH_COOKIE_NAME, getAuthCookieOptions } from "@/lib/auth/cookies";
 import { getClientIdentifier } from "@/lib/auth/clientIdentifier";
-import { checkRateLimit } from "@/lib/auth/rateLimit";
+import { checkRateLimitMemory } from "@/lib/auth/rateLimitMemory";
 import { verifyToken } from "@/lib/auth/verifyToken";
 import { buildAuthRateLimitKey } from "@/lib/auth/rateLimitKey";
 import { isTrustedMutationRequest } from "@/lib/security/origin";
@@ -12,10 +12,20 @@ import {
   trackStatusAnomaly,
 } from "@/lib/observability/serverObservability";
 
-const COOKIE_ENDPOINT_LIMIT = {
+// In-memory rate limits — no Firestore round-trips, sub-millisecond checks.
+// Real security gate for POST is token verification (server-side JWT check),
+// not the rate counter. The counter just prevents trivial DoS.
+const POST_LIMIT = {
   windowMs: 60_000,
-  maxRequests: 20,
-};
+  maxRequests: 30,
+} as const;
+
+const DELETE_LIMIT = {
+  windowMs: 60_000,
+  // Clearing a session cookie is a low-risk operation — being too strict here
+  // means a user can get stuck in a signed-in-but-blocked state.
+  maxRequests: 100,
+} as const;
 
 export async function POST(req: Request) {
   if (!isTrustedMutationRequest(req)) {
@@ -26,13 +36,13 @@ export async function POST(req: Request) {
   }
   const ip = await getClientIdentifier();
   try {
-    const limit = await checkRateLimit(
+    const limit = checkRateLimitMemory(
       buildAuthRateLimitKey({
         route: "auth-cookie",
         method: "POST",
         clientId: ip,
       }),
-      COOKIE_ENDPOINT_LIMIT,
+      POST_LIMIT,
     );
 
     if (!limit.allowed) {
@@ -86,14 +96,14 @@ export async function POST(req: Request) {
     }
 
     if (decodedUid) {
-      const uidLimit = await checkRateLimit(
+      const uidLimit = checkRateLimitMemory(
         buildAuthRateLimitKey({
           route: "auth-cookie",
           method: "POST",
           clientId: ip,
           uid: decodedUid,
         }),
-        COOKIE_ENDPOINT_LIMIT,
+        POST_LIMIT,
       );
       if (!uidLimit.allowed) {
         logServerEvent("warn", {
@@ -121,7 +131,7 @@ export async function POST(req: Request) {
         route: "/api/auth/cookie",
         action: "parse-json",
         errorCode: "MALFORMED_JSON",
-        details: { ip, reason: error.message },
+        details: { ip, reason: (error as SyntaxError).message },
       });
       return NextResponse.json(
         { success: false, error: "Malformed JSON payload" },
@@ -151,13 +161,13 @@ export async function DELETE(req: Request) {
       );
     }
     const ip = await getClientIdentifier();
-    const limit = await checkRateLimit(
+    const limit = checkRateLimitMemory(
       buildAuthRateLimitKey({
         route: "auth-cookie",
         method: "DELETE",
         clientId: ip,
       }),
-      COOKIE_ENDPOINT_LIMIT,
+      DELETE_LIMIT,
     );
 
     if (!limit.allowed) {

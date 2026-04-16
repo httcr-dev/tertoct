@@ -41,12 +41,11 @@ export async function togglePayment(student: StudentSummary): Promise<void> {
 
 export async function toggleUserActive(
   userId: string,
-  currentlyActive: boolean,
 ): Promise<void> {
   const response = await fetch(`/api/private/users/${userId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "toggle-active", currentlyActive }),
+    body: JSON.stringify({ action: "toggle-active" }),
   });
   if (!response.ok) {
     throw new Error("Failed to toggle user active");

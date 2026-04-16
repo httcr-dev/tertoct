@@ -48,10 +48,6 @@ export async function updatePlan(
 }
 
 export async function deletePlan(planId: string): Promise<void> {
-  // Optimistic local check for better UX before server call.
-  const linkedUsers = await getDocs(query(usersCol(), where("planId", "==", planId), limit(1)));
-  if (!linkedUsers.empty) throw new PlanInUseError();
-
   const response = await fetch(`/api/private/plans/${planId}`, {
     method: "DELETE",
   });

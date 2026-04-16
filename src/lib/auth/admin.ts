@@ -10,9 +10,31 @@ function getProjectId() {
 
 export function getAdminApp() {
   if (!admin.apps.length) {
-    admin.initializeApp({
-      projectId: getProjectId(),
-    });
+    if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+      try {
+        const serviceAccount = JSON.parse(
+          process.env.FIREBASE_SERVICE_ACCOUNT_JSON,
+        );
+        
+        // Ensure private_key has actual newlines, not escaped characters from .env
+        if (serviceAccount.private_key) {
+          serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+        }
+
+        admin.initializeApp({
+
+          credential: admin.credential.cert(serviceAccount),
+          projectId: getProjectId(),
+        });
+      } catch (err) {
+        console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON", err);
+        admin.initializeApp({ projectId: getProjectId() });
+      }
+    } else {
+      admin.initializeApp({
+        projectId: getProjectId(),
+      });
+    }
   }
 
   return admin.app();

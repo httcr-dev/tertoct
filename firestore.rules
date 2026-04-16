@@ -55,7 +55,7 @@ service cloud.firestore {
 
     function isPublicCoachProfile(data) {
       return data.role in ['coach', 'admin'] &&
-        data.keys().hasOnly(['name', 'photoURL', 'role', 'bio']);
+        data.keys().hasOnly(['name', 'photoURL', 'role', 'bio', 'active']);
     }
 
     function isStudent() {
@@ -97,8 +97,6 @@ service cloud.firestore {
 
       allow create: if isSignedIn() && isValidSelfUserCreate(userId, request.resource.data);
 
-      // Students can update their own profile info.
-      // Coaches/admins can update any user.
       allow update: if isSignedIn() && (
         (userId == request.auth.uid &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'email', 'photoURL'])) ||
@@ -110,10 +108,15 @@ service cloud.firestore {
 
     match /publicProfiles/{userId} {
       allow read: if true;
-      allow create, update: if isSignedIn() && (
+      allow create: if isSignedIn() && (
         (userId == request.auth.uid && isCoach()) ||
         isAdmin()
       ) && isPublicCoachProfile(request.resource.data);
+      allow update: if isSignedIn() && (
+        (userId == request.auth.uid && isCoach()) ||
+        isAdmin()
+      ) && isPublicCoachProfile(request.resource.data) &&
+      (!('active' in request.resource.data.diff(resource.data).affectedKeys()));
       allow delete: if false;
     }
 

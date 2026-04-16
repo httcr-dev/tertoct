@@ -62,13 +62,13 @@ export default function Home() {
           {/* BACKGROUND IMAGE & OVERLAYS */}
           <div className="fixed inset-0 z-0">
             <Image
-              src="/hero-tiago.png"
+              src="/BlessTraining_Boxe_2026-03-15_532.jpg"
               alt="TertoCT Boxe Background"
               fill
               priority
               quality={100}
               unoptimized
-              className="object-cover object-top opacity-50 mix-blend-lighten"
+              className="object-cover object-center opacity-50 mix-blend-lighten"
             />
             {/* Gradients para escurecer as bordas e a base */}
             <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/20 to-black/95" />

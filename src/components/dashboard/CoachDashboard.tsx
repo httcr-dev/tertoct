@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { CheckIn, Plan, StudentSummary } from "@/lib/types";
 import { filterStudents } from "@/lib/utils/studentFilter";
+import toast from "react-hot-toast";
 import { useAuth } from "../auth/AuthProvider";
+
 import { Home, List, Users, CheckCircle, Bell } from "lucide-react";
 import { OverviewTab } from "./coach/OverviewTab";
 import { PlansTab } from "./coach/PlansTab";
@@ -204,17 +206,21 @@ export function CoachDashboard() {
         active: editingFields.active ?? editingPlan.active,
       };
 
-      if (isNew) {
-        await createPlan(payload);
-      } else {
-        await updatePlan(editingPlan.id, payload);
-      }
+      const action = isNew ? createPlan(payload) : updatePlan(editingPlan.id, payload);
+      
+      await toast.promise(action, {
+        loading: "Salvando plano...",
+        success: "Plano salvo com sucesso!",
+        error: "Erro ao salvar plano",
+      });
+
       setEditingPlan(null);
       setEditingFields({});
     } catch (err) {
       console.error("Failed to save plan");
     }
   }, [editingPlan, editingFields]);
+
 
   const handleDeletePlan = useCallback(
     async (plan: Plan) => {
@@ -225,11 +231,15 @@ export function CoachDashboard() {
       )
         return;
       try {
-        await deletePlanService(plan.id);
+        await toast.promise(deletePlanService(plan.id), {
+          loading: "Deletando plano...",
+          success: "Plano deletado!",
+          error: "Erro ao deletar plano",
+        });
         if (editingPlan?.id === plan.id) setEditingPlan(null);
       } catch (err) {
         if (err instanceof PlanInUseError) {
-          window.alert(err.message);
+          toast.error(err.message);
           return;
         }
         console.error("Failed to delete plan");
@@ -239,27 +249,43 @@ export function CoachDashboard() {
   );
 
   const handleTogglePlanActive = useCallback(async (plan: Plan) => {
-    await togglePlanActive(plan);
+    await toast.promise(togglePlanActive(plan), {
+      loading: "Alterando status do plano...",
+      success: "Status alterado com sucesso!",
+      error: "Erro ao alterar status",
+    });
   }, []);
 
   // ── Student handlers (delegated to service) ──────────────────────────
   const handleAssignPlan = useCallback(
     async (studentId: string, planId: string | null) => {
-      await assignPlan(studentId, planId);
+      await toast.promise(assignPlan(studentId, planId), {
+        loading: "Atribuindo plano...",
+        success: "Plano atribuído!",
+        error: "Erro ao atribuir plano",
+      });
     },
     [],
   );
 
   const handleSetPaymentDay = useCallback(
     async (studentId: string, day: number | null) => {
-      await setPaymentDay(studentId, day);
+      await toast.promise(setPaymentDay(studentId, day), {
+        loading: "Atualizando data de pagamento...",
+        success: "Data atualizada!",
+        error: "Erro ao atualizar data",
+      });
     },
     [],
   );
 
   const handleTogglePayment = useCallback(
     async (student: StudentSummary) => {
-      await togglePayment(student);
+      await toast.promise(togglePayment(student), {
+        loading: "Alterando pagamento...",
+        success: "Pagamento atualizado!",
+        error: "Erro ao atualizar pagamento",
+      });
     },
     [],
   );
@@ -267,13 +293,18 @@ export function CoachDashboard() {
   const toggleStudentActive = useCallback(
     async (student: StudentSummary) => {
       try {
-        await toggleUserActive(student.id, student.active !== false);
+        await toast.promise(toggleUserActive(student.id), {
+          loading: "Alterando status...",
+          success: "Status alterado com sucesso!",
+          error: "Erro ao alterar status",
+        });
       } catch (err) {
         console.error("Failed to toggle student active");
       }
     },
     [],
   );
+
 
   // ── Check-in history modal ───────────────────────────────────────────
   const viewCheckins = useCallback(async (student: StudentSummary) => {

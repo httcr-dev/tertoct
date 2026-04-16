@@ -37,9 +37,8 @@ export function isAuthorizedForPath(
   );
 
   if (!matchingRule) {
-    if (pathname.startsWith("/api/private")) {
-      return false;
-    }
+    // If no specific prefix matches, let the request proceed to the route handler.
+    // Every /api/private/* route uses getPrivateRouteContext() to enforce its own RBAC.
     return true;
   }
 

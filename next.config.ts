@@ -3,6 +3,10 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // Allow ngrok and other dev origins for testing
   allowedDevOrigins: ["*.ngrok-free.dev", "*.ngrok.io"],
+  images: {
+    // Include all quality values used in <Image quality={N} /> props.
+    qualities: [100, 75],
+  },
   async headers() {
     return [
       {

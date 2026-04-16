@@ -32,7 +32,6 @@ export async function ensureUserDocument(user: User): Promise<AppUserProfile> {
           photoURL: profile.photoURL ?? null,
           role: profile.role,
           bio: null,
-          active: profile.active,
         },
         { merge: true },
       );
@@ -75,7 +74,6 @@ export async function ensureUserDocument(user: User): Promise<AppUserProfile> {
         photoURL: updates.photoURL ?? data.photoURL ?? user.photoURL ?? null,
         role,
         bio: data.bio ?? null,
-        active: data.active ?? true,
       },
       { merge: true },
     );

@@ -39,7 +39,10 @@ export async function PATCH(
   const auth = await getPrivateRouteContext();
   if (!auth.ok) return auth.response;
   const forbidden = requireRole(auth.context, ["coach", "admin"]);
-  if (forbidden) return forbidden;
+  if (forbidden) {
+    console.warn("[users PATCH] 403 Forbidden. User context:", auth.context);
+    return forbidden;
+  }
 
   const { userId } = await params;
   const { data, errorResponse } = await validateBody(req, payloadSchema);
@@ -117,7 +120,17 @@ export async function PATCH(
   }
 
   if (data.action === "toggle-active") {
-    await ref.update({ active: current.active !== true });
+    const isCurrentlyActive = current.active !== false;
+    const newActive = !isCurrentlyActive;
+    await ref.update({ active: newActive });
+    
+    if (current.role === "coach" || current.role === "admin") {
+      await getAdminFirestore()
+        .collection("publicProfiles")
+        .doc(userId)
+        .set({ active: newActive }, { merge: true });
+    }
+    
     return NextResponse.json({ success: true });
   }
 

@@ -45,6 +45,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const cookieSyncStateRef = useRef(initialCookieSyncState);
   const recoveringSessionRef = useRef(false);
   const authEventIdRef = useRef(0);
+  // Track whether we have actually written a session cookie so we only
+  // send DELETE when there is something to delete (avoids rate-limit spam
+  // on every unauthenticated page load).
+  const hasCookieRef = useRef(false);
 
   useEffect(() => {
     const auth = getFirebaseAuth();
@@ -62,8 +66,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (recoveringSessionRef.current && user) {
           return;
         }
-        setFirebaseUser(user);
-        setLoading(false);
 
         if (user) {
           void (async () => {
@@ -87,11 +89,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   throw new Error("Cookie sync failed");
                 }
                 cookieSyncStateRef.current = nextSyncState;
+                hasCookieRef.current = true;
               }
 
               const ensured = await ensureUserDocument(user);
               if (authEventId === authEventIdRef.current) {
                 setProfile(ensured);
+                // Expose the user and stop loading ONLY after the cookie is securely mapped.
+                // This prevents the page.tsx useEffect from redirecting to /dashboard prematurely
+                // before the middleware in Next.js can read the cookie.
+                setFirebaseUser(user);
+                setLoading(false);
               }
             } catch (error) {
               console.error("Failed to ensure user document or set cookie", error);
@@ -100,10 +108,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 cookieSyncStateRef.current = initialCookieSyncState;
                 setFirebaseUser(null);
                 setProfile(null);
-                try {
-                  await fetch("/api/auth/cookie", { method: "DELETE" });
-                } catch {
-                  // best effort cookie cleanup
+                setLoading(false);
+                if (hasCookieRef.current) {
+                  hasCookieRef.current = false;
+                  try {
+                    await fetch("/api/auth/cookie", { method: "DELETE" });
+                  } catch {
+                    // best effort cookie cleanup
+                  }
                 }
                 try {
                   await signOut(auth);
@@ -114,11 +126,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
           })();
         } else {
-          void fetch("/api/auth/cookie", { method: "DELETE" }).catch(() => {
-            // best effort cookie cleanup
-          });
+          if (hasCookieRef.current) {
+            hasCookieRef.current = false;
+            void fetch("/api/auth/cookie", { method: "DELETE" }).catch(() => {
+              // best effort cookie cleanup
+            });
+          }
           cookieSyncStateRef.current = initialCookieSyncState;
           setProfile(null);
+          setFirebaseUser(null);
+          setLoading(false);
         }
       });
     };

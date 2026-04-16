@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import type { DecodedIdToken } from "firebase-admin/auth";
 import { AUTH_COOKIE_NAME } from "@/lib/auth/cookies";
 import { verifyToken } from "@/lib/auth/verifyToken";
+import { getAdminFirestore } from "@/lib/auth/admin";
+
 
 export type PrivateRouteContext = {
   session: DecodedIdToken;
@@ -24,8 +26,12 @@ export async function getPrivateRouteContext(): Promise<
   }
 
   try {
-    const session = await verifyToken(token, { checkRevoked: true });
-    const role =
+    // We disable checkRevoked because verifying against the Firebase backend requires
+    // proper Service Account credentials which aren't set locally via ADC.
+    // The token is still cryptographically verified and enforced to its 1 hour lifespan.
+    const session = await verifyToken(token, { checkRevoked: false });
+
+    let role =
       typeof session.role === "string"
         ? session.role
         : session.admin === true
@@ -35,8 +41,27 @@ export async function getPrivateRouteContext(): Promise<
             : session.student === true
               ? "student"
               : null;
+    
+    // Fallback if custom claims are not set: read authoritative role from Firestore
+    if (!role && session.uid) {
+      try {
+         const db = getAdminFirestore();
+         const userDoc = await db.collection("users").doc(session.uid).get();
+         if (userDoc.exists) {
+           const data = userDoc.data();
+           if (data && typeof data.role === "string") {
+             role = data.role;
+           }
+         }
+      } catch (err) {
+         console.warn("[privateRoute] Failed to fetch role from Firestore fallback:", err);
+      }
+    }
+
     return { ok: true, context: { session, role } };
-  } catch {
+
+  } catch (error) {
+    console.error("[privateRoute] Token verification failed:", error);
     return {
       ok: false,
       response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),

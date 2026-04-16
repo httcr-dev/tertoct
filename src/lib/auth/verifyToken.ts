@@ -13,7 +13,8 @@ export async function verifyToken(
     const decoded = await getAdminAuth()
       .verifyIdToken(token, options.checkRevoked === true);
     return decoded;
-  } catch {
+  } catch (error) {
+    console.error("[verifyToken] Firebase Admin verifyIdToken error:", error);
     throw new Error("Invalid token");
   }
 }
