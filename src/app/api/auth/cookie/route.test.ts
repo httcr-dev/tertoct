@@ -9,7 +9,7 @@ const mockCookies = jest.fn(async () => ({
 
 const mockVerifyToken = jest.fn();
 const mockGetClientIdentifier = jest.fn(async () => "127.0.0.1");
-const mockCheckRateLimit = jest.fn(async () => ({ allowed: true }));
+const mockCheckRateLimitMemory = jest.fn(() => ({ allowed: true }));
 
 jest.mock("next/headers", () => ({
   cookies: () => mockCookies(),
@@ -23,15 +23,19 @@ jest.mock("@/lib/auth/clientIdentifier", () => ({
   getClientIdentifier: () => mockGetClientIdentifier(),
 }));
 
-jest.mock("@/lib/auth/rateLimit", () => ({
-  checkRateLimit: mockCheckRateLimit,
+jest.mock("@/lib/auth/rateLimitMemory", () => ({
+  checkRateLimitMemory: (...args: any[]) => mockCheckRateLimitMemory(...args),
+}));
+
+jest.mock("@/lib/security/origin", () => ({
+  isTrustedMutationRequest: () => true,
 }));
 
 describe("POST /api/auth/cookie", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockVerifyToken.mockResolvedValue({ uid: "user-1" });
-    mockCheckRateLimit.mockResolvedValue({ allowed: true });
+    mockCheckRateLimitMemory.mockReturnValue({ allowed: true });
   });
 
   it("returns 200 and sets cookie for valid token", async () => {
@@ -80,7 +84,7 @@ describe("POST /api/auth/cookie", () => {
   });
 
   it("returns 429 when global rate limit blocks request", async () => {
-    mockCheckRateLimit.mockResolvedValueOnce({ allowed: false });
+    mockCheckRateLimitMemory.mockReturnValueOnce({ allowed: false });
     const { POST } = await import("./route");
     const request = new Request("http://localhost/api/auth/cookie", {
       method: "POST",
@@ -96,9 +100,9 @@ describe("POST /api/auth/cookie", () => {
   });
 
   it("returns 429 when uid rate limit blocks request", async () => {
-    mockCheckRateLimit
-      .mockResolvedValueOnce({ allowed: true })
-      .mockResolvedValueOnce({ allowed: false });
+    mockCheckRateLimitMemory
+      .mockReturnValueOnce({ allowed: true })
+      .mockReturnValueOnce({ allowed: false });
     const { POST } = await import("./route");
     const request = new Request("http://localhost/api/auth/cookie", {
       method: "POST",

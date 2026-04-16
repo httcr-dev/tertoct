@@ -91,24 +91,32 @@ describe("updatePlan", () => {
 });
 
 describe("deletePlan", () => {
-  it("calls delete endpoint when no users are linked", async () => {
+  it("calls delete endpoint and succeeds", async () => {
     await deletePlan("plan-456");
 
-    expect(mockQuery).toHaveBeenCalled();
-    expect(mockWhere).toHaveBeenCalledWith("planId", "==", "plan-456");
-    expect(mockLimit).toHaveBeenCalledWith(1);
     expect(global.fetch).toHaveBeenCalledWith("/api/private/plans/plan-456", {
       method: "DELETE",
     });
   });
 
-  it("throws PlanInUseError and skips delete when linked users exist", async () => {
-    mockGetDocs.mockResolvedValueOnce({ empty: false });
+  it("throws PlanInUseError when API returns 409", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: false,
+      status: 409,
+      json: async () => ({}),
+    });
 
     await expect(deletePlan("plan-456")).rejects.toBeInstanceOf(PlanInUseError);
-    expect(global.fetch).not.toHaveBeenCalledWith("/api/private/plans/plan-456", {
-      method: "DELETE",
+  });
+
+  it("throws generic error when API returns other error status", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: async () => ({}),
     });
+
+    await expect(deletePlan("plan-456")).rejects.toThrow("Failed to delete plan");
   });
 });
 
