@@ -10,29 +10,31 @@ function getProjectId() {
 
 export function getAdminApp() {
   if (!admin.apps.length) {
-    if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+    const projectId = getProjectId();
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY;
+
+    if (projectId && clientEmail && privateKey) {
       try {
-        const serviceAccount = JSON.parse(
-          process.env.FIREBASE_SERVICE_ACCOUNT_JSON,
-        );
-        
-        // Ensure private_key has actual newlines, not escaped characters from .env
-        if (serviceAccount.private_key) {
-          serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
-        }
-
         admin.initializeApp({
-
-          credential: admin.credential.cert(serviceAccount),
-          projectId: getProjectId(),
+          credential: admin.credential.cert({
+            projectId,
+            clientEmail,
+            privateKey: privateKey.replace(/\\n/g, "\n"),
+          }),
         });
+        console.log(
+          "✅ Firebase Admin inicializado via variáveis individuais.",
+        );
       } catch (err) {
-        console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON", err);
-        admin.initializeApp({ projectId: getProjectId() });
+        console.error("❌ Erro ao inicializar Admin SDK com cert:", err);
       }
     } else {
+      console.warn(
+        "⚠️ Firebase Admin: Nenhuma credencial encontrada. Tentando modo default...",
+      );
       admin.initializeApp({
-        projectId: getProjectId(),
+        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
       });
     }
   }

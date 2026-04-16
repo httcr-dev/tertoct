@@ -55,4 +55,3 @@ export function getFirestoreDb(): Firestore {
 }
 
 export const googleProvider = new GoogleAuthProvider();
-
