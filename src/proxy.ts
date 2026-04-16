@@ -12,51 +12,25 @@ function generateNonce(): string {
   return crypto.randomUUID();
 }
 
-function buildCsp(nonce: string): string {
-  const isDev = process.env.NODE_ENV !== "production";
-
-  // script-src:
-  // - Production: nonce-only (strict). Next.js will propagate the nonce to its own inline scripts.
-  // - Development: no nonce in script-src because CSP3 silently ignores 'unsafe-inline' when a
-  //   nonce is present, and Next.js HMR / Turbopack inject many unonced inline scripts.
-  //   In dev we rely on 'unsafe-inline' + 'unsafe-eval' + explicit origin allowlists instead.
-  const scriptSrc = isDev
-    ? [
-        `'self'`,
-        `'unsafe-inline'`,
-        `'unsafe-eval'`,
-        `https://apis.google.com`,
-        `https://accounts.google.com`,
-      ].join(" ")
-    : [
-        `'self'`,
-        `'nonce-${nonce}'`,
-        `https://apis.google.com`,
-        `https://accounts.google.com`,
-      ].join(" ");
-
-  // style-src: Next.js, Google Fonts and various dev-tool packages inject inline styles
-  // that don't carry the page nonce. 'unsafe-inline' is the pragmatic choice here;
-  // the nonce fallback is overridden by it only in older browsers.
-  const styleSrc = `'self' 'unsafe-inline' https://fonts.googleapis.com`;
-
+function buildCsp(): string {
   return [
     "default-src 'self'",
-    `script-src ${scriptSrc}`,
-    `style-src ${styleSrc}`,
-    "img-src 'self' data: https:",
-    // Firebase Auth popup needs to post messages and load iframes from Google origins.
-    "connect-src 'self' https:",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://accounts.google.com https://va.vercel-scripts.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "img-src 'self' data: https: blob:",
+    "connect-src 'self' https: *.google-analytics.com",
     "frame-src https://accounts.google.com https://*.firebaseapp.com",
-    "frame-ancestors 'none'",
+    "font-src 'self' data: https://fonts.gstatic.com",
     "base-uri 'self'",
     "form-action 'self'",
-    // Allow Google Fonts stylesheets and woff2 files.
-    "font-src 'self' data: https://fonts.gstatic.com",
+    "upgrade-insecure-requests",
   ].join("; ");
 }
 
-function withSecurityHeaders(response: NextResponse, nonce: string): NextResponse {
+function withSecurityHeaders(
+  response: NextResponse,
+  nonce: string,
+): NextResponse {
   response.headers.set("Content-Security-Policy", buildCsp(nonce));
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("X-Content-Type-Options", "nosniff");
@@ -66,7 +40,9 @@ function withSecurityHeaders(response: NextResponse, nonce: string): NextRespons
 }
 
 function isProtectedPath(pathname: string) {
-  return pathname.startsWith("/dashboard") || pathname.startsWith("/api/private");
+  return (
+    pathname.startsWith("/dashboard") || pathname.startsWith("/api/private")
+  );
 }
 
 function isApiPath(pathname: string) {
@@ -82,7 +58,10 @@ function unauthenticatedResponse(req: NextRequest, nonce: string) {
     );
   }
 
-  return withSecurityHeaders(NextResponse.redirect(new URL("/", req.url)), nonce);
+  return withSecurityHeaders(
+    NextResponse.redirect(new URL("/", req.url)),
+    nonce,
+  );
 }
 
 function forbiddenResponse(req: NextRequest, nonce: string) {
@@ -151,5 +130,7 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)",
+  ],
 };
