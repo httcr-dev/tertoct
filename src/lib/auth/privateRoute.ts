@@ -5,13 +5,12 @@ import { AUTH_COOKIE_NAME } from "@/lib/auth/cookies";
 import { verifyToken } from "@/lib/auth/verifyToken";
 import { getAdminFirestore } from "@/lib/auth/admin";
 
-
 export type PrivateRouteContext = {
   session: DecodedIdToken;
   role: string | null;
 };
 
-export async function getPrivateRouteContext(): Promise<
+export async function getPrivateRouteContext(req: Request): Promise<
   | { ok: true; context: PrivateRouteContext }
   | { ok: false; response: NextResponse }
 > {
