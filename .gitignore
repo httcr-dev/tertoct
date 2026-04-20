@@ -44,3 +44,6 @@ next-env.d.ts
 
 service-key.json
 tertoct-prod.json
+
+
+.ai*
