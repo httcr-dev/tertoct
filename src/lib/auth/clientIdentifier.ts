@@ -26,8 +26,11 @@ export async function getClientIdentifier(): Promise<string> {
   const headerStore = await headers();
   const trustedProxy = process.env.TRUST_PROXY_HEADERS === "true";
   const realIp = sanitizeHeaderValue(headerStore.get("x-real-ip"));
-  const forwardedIp = sanitizeHeaderValue(firstForwardedIp(headerStore.get("x-forwarded-for")));
-  const userAgent = sanitizeHeaderValue(headerStore.get("user-agent")) ?? "unknown-agent";
+  const forwardedIp = sanitizeHeaderValue(
+    firstForwardedIp(headerStore.get("x-forwarded-for")),
+  );
+  const userAgent =
+    sanitizeHeaderValue(headerStore.get("user-agent")) ?? "unknown-agent";
 
   const trustedIp =
     trustedProxy && realIp && isIpLike(realIp)
@@ -42,7 +45,10 @@ export async function getClientIdentifier(): Promise<string> {
     "unknown-ip";
 
   const fingerprintSeed = trustedIp ?? `${fallbackIp}|${userAgent}`;
-  const digest = createHash("sha256").update(fingerprintSeed).digest("hex").slice(0, 24);
+  const digest = createHash("sha256")
+    .update(fingerprintSeed)
+    .digest("hex")
+    .slice(0, 24);
 
   return `cid:${digest}`;
 }

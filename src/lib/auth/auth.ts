@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import type { DecodedIdToken } from "firebase-admin/auth";
+
+import { AUTH_COOKIE_NAME } from "./cookies";
+import { verifyToken } from "./verifyToken";
+import { getAdminFirestore } from "./admin";
 
 export type PrivateRouteContext = {
   session: DecodedIdToken;
@@ -36,25 +41,27 @@ export async function getPrivateRouteContext(): Promise<
             : session.student === true
               ? "student"
               : null;
-    
+
     // Fallback if custom claims are not set: read authoritative role from Firestore
     if (!role && session.uid) {
       try {
-         const db = getAdminFirestore();
-         const userDoc = await db.collection("users").doc(session.uid).get();
-         if (userDoc.exists) {
-           const data = userDoc.data();
-           if (data && typeof data.role === "string") {
-             role = data.role;
-           }
-         }
+        const db = getAdminFirestore();
+        const userDoc = await db.collection("users").doc(session.uid).get();
+        if (userDoc.exists) {
+          const data = userDoc.data();
+          if (data && typeof data.role === "string") {
+            role = data.role;
+          }
+        }
       } catch (err) {
-         console.warn("[privateRoute] Failed to fetch role from Firestore fallback:", err);
+        console.warn(
+          "[privateRoute] Failed to fetch role from Firestore fallback:",
+          err,
+        );
       }
     }
 
     return { ok: true, context: { session, role } };
-
   } catch (error) {
     console.error("[privateRoute] Token verification failed:", error);
     return {
@@ -75,7 +82,10 @@ export function requireRole(
 }
 
 export function isTrustedMutationRequest(req: Request): boolean {
-  const trustedOrigins = ["https://trusted-origin.com", "http://localhost:3000"];
+  const trustedOrigins = [
+    "https://trusted-origin.com",
+    "http://localhost:3000",
+  ];
   const origin = req.headers.get("origin");
 
   return trustedOrigins.includes(origin ?? "");

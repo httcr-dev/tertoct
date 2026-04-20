@@ -2,7 +2,6 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import type { DecodedIdToken } from "firebase-admin/auth";
 import { AUTH_COOKIE_NAME } from "@/lib/auth/cookies";
-// import { isTrustedMutationRequest } from './verifyToken';
 import { verifyToken } from "@/lib/auth/verifyToken";
 import { getAdminFirestore } from "@/lib/auth/admin";
 
@@ -11,7 +10,7 @@ export type PrivateRouteContext = {
   role: string | null;
 };
 
-export async function getPrivateRouteContext(req: Request): Promise<
+export async function getPrivateRouteContext(): Promise<
   | { ok: true; context: PrivateRouteContext }
   | { ok: false; response: NextResponse }
 > {
@@ -41,25 +40,27 @@ export async function getPrivateRouteContext(req: Request): Promise<
             : session.student === true
               ? "student"
               : null;
-    
+
     // Fallback if custom claims are not set: read authoritative role from Firestore
     if (!role && session.uid) {
       try {
-         const db = getAdminFirestore();
-         const userDoc = await db.collection("users").doc(session.uid).get();
-         if (userDoc.exists) {
-           const data = userDoc.data();
-           if (data && typeof data.role === "string") {
-             role = data.role;
-           }
-         }
+        const db = getAdminFirestore();
+        const userDoc = await db.collection("users").doc(session.uid).get();
+        if (userDoc.exists) {
+          const data = userDoc.data();
+          if (data && typeof data.role === "string") {
+            role = data.role;
+          }
+        }
       } catch (err) {
-         console.warn("[privateRoute] Failed to fetch role from Firestore fallback:", err);
+        console.warn(
+          "[privateRoute] Failed to fetch role from Firestore fallback:",
+          err,
+        );
       }
     }
 
     return { ok: true, context: { session, role } };
-
   } catch (error) {
     console.error("[privateRoute] Token verification failed:", error);
     return {
