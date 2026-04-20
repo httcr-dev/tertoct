@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import type { DecodedIdToken } from "firebase-admin/auth";
 import { AUTH_COOKIE_NAME } from "@/lib/auth/cookies";
+// import { isTrustedMutationRequest } from './verifyToken';
 import { verifyToken } from "@/lib/auth/verifyToken";
 import { getAdminFirestore } from "@/lib/auth/admin";
 

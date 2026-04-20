@@ -8,7 +8,7 @@ function isIpLike(value: string): boolean {
   return IPV4_RE.test(value) || IPV6_RE.test(value);
 }
 
-function sanitizeHeaderValue(value: string | null): string | null {
+export function sanitizeHeaderValue(value: string | null): string | null {
   if (!value) return null;
   const trimmed = value.trim().slice(0, 256);
   if (!trimmed) return null;
