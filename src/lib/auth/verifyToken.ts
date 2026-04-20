@@ -18,3 +18,10 @@ export async function verifyToken(
     throw new Error("Invalid token");
   }
 }
+
+export function isTrustedMutationRequest(req: Request): boolean {
+  const trustedOrigins = ["https://trusted-origin.com", "http://localhost:3000"];
+  const origin = req.headers.get("origin");
+
+  return trustedOrigins.includes(origin ?? "");
+}
