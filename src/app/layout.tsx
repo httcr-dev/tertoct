@@ -33,7 +33,7 @@ export default function RootLayout({
         <Toaster position="top-center" toastOptions={{ style: { background: '#18181b', color: '#fff' } }} />
         <AuthProvider>{children}</AuthProvider>
 
-        <footer className="bg-zinc-800 text-zinc-200 py-6 text-center">
+        <footer className="bg-zinc-900 border-t border-zinc-800 text-zinc-400 py-8 flex flex-col items-center justify-center gap-4 mt-auto relative z-10">
           <p className="text-sm">
             &copy; 2026 TertoCT. Todos os direitos reservados.
           </p>

@@ -103,7 +103,7 @@ export default function Home() {
                 </a>
                 <button
                   onClick={signInWithGoogle}
-                  className="ml-4 cursor-pointer rounded-md bg-[#c29b62] px-6 py-2.5 text-sm font-semibold text-black transition hover:bg-[#d4b075] shadow-[0_0_15px_rgba(194,155,98,0.4)]"
+                  className="ml-4 cursor-pointer rounded-full bg-[#c29b62] px-6 py-2.5 text-sm font-semibold text-black transition-all hover:bg-[#d4b075] hover:-translate-y-0.5 hover:shadow-[0_0_25px_rgba(194,155,98,0.6)] shadow-[0_0_15px_rgba(194,155,98,0.4)] active:scale-95"
                 >
                   Entrar com conta Google
                 </button>
@@ -111,7 +111,7 @@ export default function Home() {
 
               <button
                 onClick={signInWithGoogle}
-                className="md:hidden flex cursor-pointer items-center gap-2 rounded-md bg-[#c29b62] px-4 py-2 text-sm font-medium text-black transition hover:bg-[#d4b075]"
+                className="md:hidden flex cursor-pointer items-center gap-2 rounded-full bg-[#c29b62] px-4 py-2 text-sm font-medium text-black transition-all hover:bg-[#d4b075] hover:-translate-y-0.5 hover:shadow-[0_0_15px_rgba(194,155,98,0.5)] active:scale-95"
               >
                 <span>Entrar</span>
               </button>
@@ -119,13 +119,12 @@ export default function Home() {
 
             {/* HERO SECTION */}
             <section className="mt-20 flex flex-1 flex-col items-center justify-center text-center space-y-6 lg:mt-28">
-              <h1 className="max-w-4xl text-5xl font-black uppercase leading-[1.1] tracking-wide text-zinc-100 sm:text-6xl lg:text-[5rem] drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)]">
-                Treino de boxe focado
-                <br />
+              <h1 className="max-w-4xl text-4xl font-extrabold leading-tight tracking-tight text-zinc-100 sm:text-5xl lg:text-6xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                Treino de boxe focado{" "}
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#e6c687] via-[#c29b62] to-[#9c753b]">
                   em saúde, desempenho!
-                </span>
-                <br />e disciplina
+                </span>{" "}
+                e disciplina
               </h1>
               <p className="max-w-2xl text-base text-zinc-300 sm:text-lg drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] mt-6">
                 Entre em forma de maneira intensa e focada.
@@ -134,7 +133,7 @@ export default function Home() {
 
               <button
                 onClick={signInWithGoogle}
-                className="mt-8 flex cursor-pointer items-center gap-3 rounded-md bg-zinc-100 px-8 py-3.5 text-base font-semibold text-zinc-900 shadow-[0_0_25px_rgba(255,255,255,0.15)] transition hover:bg-white hover:scale-[1.02]"
+                className="mt-8 flex cursor-pointer items-center gap-3 rounded-full bg-zinc-100 px-8 py-3.5 text-base font-semibold text-zinc-900 shadow-[0_0_20px_rgba(255,255,255,0.1)] transition-all hover:bg-white hover:scale-105 hover:shadow-[0_0_30px_rgba(255,255,255,0.2)] active:scale-95"
               >
                 <Image
                   src="/google-logo.svg"
@@ -168,14 +167,32 @@ export default function Home() {
               <h2 className="mt-2 text-3xl font-black text-[#c29b62] sm:text-4xl drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">
                 METAS EM REALIDADE?
               </h2>
-              <a
-                href="https://wa.me/554499771761?text=Ol%C3%A1!%20Gostaria%20de%20agendar%20uma%20aula%20experimental%20de%20boxe."
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-10 cursor-pointer inline-block rounded-md bg-[#c29b62] px-10 py-4 text-sm font-bold uppercase tracking-wider text-black shadow-[0_0_20px_rgba(194,155,98,0.3)] transition hover:bg-[#d4b075] hover:-translate-y-1"
-              >
-                Agendar Aula Experimental
-              </a>
+              <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+                <a
+                  href="https://wa.me/554499771761?text=Ol%C3%A1!%20Gostaria%20de%20agendar%20uma%20aula%20experimental%20de%20boxe."
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="cursor-pointer inline-flex items-center justify-center rounded-full bg-[#c29b62] px-10 py-5 text-sm font-bold uppercase tracking-wider text-black shadow-[0_0_20px_rgba(194,155,98,0.3)] transition-all hover:bg-[#d4b075] hover:-translate-y-1 hover:shadow-[0_0_30px_rgba(194,155,98,0.5)] active:translate-y-0 active:scale-95"
+                >
+                  Agendar Aula Experimental
+                </a>
+
+                {/* Animated Como Chegar */}
+                <a
+                  href="https://maps.app.goo.gl/search/Avenida+Maua+959+Maringa+PR"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group relative flex items-center justify-center gap-4 overflow-hidden rounded-full bg-zinc-900 border border-zinc-800 px-8 py-4 text-sm font-medium text-zinc-300 shadow-[0_0_20px_rgba(0,0,0,0.5)] transition-all hover:border-[#c29b62]/50 hover:bg-zinc-800 hover:-translate-y-1 hover:shadow-[0_0_30px_rgba(194,155,98,0.15)] active:translate-y-0 active:scale-95"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#c29b62]/10 to-transparent -translate-x-full transition-transform duration-1000 group-hover:translate-x-full" />
+                  <span className="text-2xl group-hover:animate-bounce">📍</span>
+                  <div className="flex flex-col text-left">
+                    <span className="text-[10px] uppercase text-[#c29b62] tracking-[0.2em] font-black">Como Chegar</span>
+                    <span className="font-semibold text-white">Avenida Mauá, 959 — Maringá, PR</span>
+                  </div>
+                  <svg className="w-5 h-5 ml-2 text-zinc-500 transition-colors group-hover:text-[#c29b62]" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                </a>
+              </div>
             </section>
 
             {/* Footer moved to RootLayout to avoid duplicate/dynamic rendering */}
