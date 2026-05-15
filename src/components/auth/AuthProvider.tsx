@@ -33,6 +33,54 @@ const AUTH_PENDING_KEY = "tertoct:auth-pending-until";
 const AUTH_PENDING_TTL_MS = 60_000;
 const AUTH_PENDING_GRACE_MS = 1_800;
 
+/**
+ * Safari iOS often clears sessionStorage across the Google OAuth redirect; localStorage
+ * survives. Fallback to sessionStorage if localStorage throws (private mode / quota).
+ */
+function readAuthPendingExpiry(): number {
+  if (typeof window === "undefined") return 0;
+  try {
+    const fromLocal = Number(window.localStorage.getItem(AUTH_PENDING_KEY) ?? 0);
+    if (Number.isFinite(fromLocal) && fromLocal > 0) return fromLocal;
+  } catch {
+    /* ignore */
+  }
+  try {
+    const fromSession = Number(window.sessionStorage.getItem(AUTH_PENDING_KEY) ?? 0);
+    return Number.isFinite(fromSession) ? fromSession : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeAuthPendingExpiry(expiresAt: number): void {
+  const value = String(expiresAt);
+  try {
+    window.localStorage.setItem(AUTH_PENDING_KEY, value);
+    return;
+  } catch {
+    /* fall through */
+  }
+  try {
+    window.sessionStorage.setItem(AUTH_PENDING_KEY, value);
+  } catch {
+    /* ignore */
+  }
+}
+
+function clearAuthPendingExpiry(): void {
+  try {
+    window.localStorage.removeItem(AUTH_PENDING_KEY);
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.sessionStorage.removeItem(AUTH_PENDING_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 function shouldUseRedirectSignIn() {
   if (typeof window === "undefined") return false;
 
@@ -93,20 +141,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (typeof window === "undefined") return;
 
     if (pending) {
-      window.sessionStorage.setItem(
-        AUTH_PENDING_KEY,
-        String(Date.now() + AUTH_PENDING_TTL_MS),
-      );
+      writeAuthPendingExpiry(Date.now() + AUTH_PENDING_TTL_MS);
       return;
     }
 
-    window.sessionStorage.removeItem(AUTH_PENDING_KEY);
+    clearAuthPendingExpiry();
   }, []);
 
   const getAuthErrorMessage = useCallback((error: unknown) => {
     const authError = error as { code?: string; message?: string };
 
     switch (authError.code) {
+      case "permission-denied":
+        return "Não foi possível sincronizar seu cadastro (permissão negada). Tente de novo ou fale com o suporte.";
       case "auth/unauthorized-domain":
         return "Este domínio não está autorizado no Firebase Authentication.";
       case "auth/operation-not-allowed":
@@ -127,14 +174,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let unsubscribe: (() => void) | null = null;
 
     const initAuth = async () => {
-      const pendingUntil = Number(
-        window.sessionStorage.getItem(AUTH_PENDING_KEY) ?? 0,
-      );
+      const pendingUntil = readAuthPendingExpiry();
       const hasPendingSignIn = pendingUntil > Date.now();
       if (hasPendingSignIn) {
         setAuthPendingState(true);
       } else {
-        window.sessionStorage.removeItem(AUTH_PENDING_KEY);
+        clearAuthPendingExpiry();
       }
 
       try {
@@ -143,6 +188,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error("Error handling redirect result", error);
         setAuthError(getAuthErrorMessage(error));
         setAuthPending(false);
+        setLoading(false);
       }
 
       unsubscribe = onIdTokenChanged(auth, (user) => {
@@ -169,10 +215,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 const cookieResponse = await fetch("/api/auth/cookie", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
+                  credentials: "same-origin",
                   body: JSON.stringify({ token }),
                 });
                 if (!cookieResponse.ok) {
-                  throw new Error("Cookie sync failed");
+                  let detail = `Sessão HTTP ${cookieResponse.status}`;
+                  try {
+                    const body = (await cookieResponse.json()) as {
+                      error?: string;
+                    };
+                    if (body?.error) detail = `${detail}: ${body.error}`;
+                  } catch {
+                    /* ignore non-JSON error bodies */
+                  }
+                  throw new Error(detail);
                 }
                 cookieSyncStateRef.current = nextSyncState;
                 hasCookieRef.current = true;
@@ -228,9 +284,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               // best effort cookie cleanup
             });
           }
-          const pendingUntil = Number(
-            window.sessionStorage.getItem(AUTH_PENDING_KEY) ?? 0,
-          );
+          const pendingUntil = readAuthPendingExpiry();
           if (pendingUntil > Date.now()) {
             setAuthPendingState(true);
             pendingClearTimeoutRef.current = setTimeout(() => {

@@ -37,4 +37,35 @@ describe("isTrustedMutationRequest", () => {
     });
     expect(isTrustedMutationRequest(req)).toBe(false);
   });
+
+  it("allows www origin when request URL is apex (and vice versa)", () => {
+    const req = makeReq("https://example.com/api/auth/cookie", {
+      origin: "https://www.example.com",
+    });
+    expect(isTrustedMutationRequest(req)).toBe(true);
+  });
+
+  it("allows origin matching x-forwarded-host when req.url host differs", () => {
+    const req = makeReq("http://internal.local/api/auth/cookie", {
+      origin: "https://app.example.com",
+      host: "internal.local",
+      "x-forwarded-host": "app.example.com",
+      "x-forwarded-proto": "https",
+    });
+    expect(isTrustedMutationRequest(req)).toBe(true);
+  });
+
+  it("allows missing Origin when Sec-Fetch-Site is same-origin (production)", () => {
+    const req = makeReq("https://app.example.com/api/auth/cookie", {
+      "sec-fetch-site": "same-origin",
+    });
+    expect(isTrustedMutationRequest(req)).toBe(true);
+  });
+
+  it("rejects missing Origin in production when Sec-Fetch-Site is cross-site", () => {
+    const req = makeReq("https://app.example.com/api/auth/cookie", {
+      "sec-fetch-site": "cross-site",
+    });
+    expect(isTrustedMutationRequest(req)).toBe(false);
+  });
 });
