@@ -14,10 +14,10 @@ import {
   onIdTokenChanged,
   signInWithPopup,
   signInWithRedirect,
-  getRedirectResult,
   signOut,
   User as FirebaseUser,
 } from "firebase/auth";
+import { consumeRedirectResult } from "@/lib/firebase/redirectResult";
 import {
   AppUserProfile,
   getFirebaseAuth,
@@ -28,6 +28,7 @@ import {
   initialCookieSyncState,
   shouldSyncCookie,
 } from "@/components/auth/cookieSyncState";
+import { isDevTunnelHostname } from "@/lib/security/origin";
 
 const AUTH_PENDING_KEY = "tertoct:auth-pending-until";
 const AUTH_PENDING_TTL_MS = 60_000;
@@ -80,6 +81,11 @@ function clearAuthPendingExpiry(): void {
 
 function shouldUseRedirectSignIn() {
   if (typeof window === "undefined") return false;
+
+  // ngrok/LAN: redirect often loses auth state (storage/partitioning); popup keeps same page.
+  if (isDevTunnelHostname(window.location.hostname)) {
+    return false;
+  }
 
   const ua = window.navigator.userAgent.toLowerCase();
   const platform = window.navigator.platform.toLowerCase();
@@ -169,6 +175,90 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const auth = getFirebaseAuth();
     let unsubscribe: (() => void) | null = null;
 
+    const syncUserSession = async (user: FirebaseUser): Promise<void> => {
+      if (recoveringSessionRef.current) {
+        return;
+      }
+      if (process.env.NODE_ENV !== "production") {
+        console.info("[auth] syncUserSession", user.uid, user.email);
+      }
+      const authEventId = ++authEventIdRef.current;
+      setAuthError(null);
+      setLoading(true);
+      userSessionSyncInFlightRef.current += 1;
+      try {
+        const tokenResult = await user.getIdTokenResult();
+        const token = tokenResult.token;
+        const tokenExpiry = tokenResult.expirationTime;
+        const nextSyncState = { token, expiration: tokenExpiry };
+        const mustSyncCookie = shouldSyncCookie(
+          cookieSyncStateRef.current,
+          nextSyncState,
+        );
+
+        if (mustSyncCookie) {
+          const cookieResponse = await fetch("/api/auth/cookie", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({ token }),
+          });
+          if (!cookieResponse.ok) {
+            let detail = `Sessão HTTP ${cookieResponse.status}`;
+            try {
+              const body = (await cookieResponse.json()) as {
+                error?: string;
+              };
+              if (body?.error) detail = `${detail}: ${body.error}`;
+            } catch {
+              /* ignore */
+            }
+            throw new Error(detail);
+          }
+          cookieSyncStateRef.current = nextSyncState;
+          hasCookieRef.current = true;
+        }
+
+        const ensured = await ensureUserDocument(user);
+        if (authEventId === authEventIdRef.current) {
+          if (pendingClearTimeoutRef.current) {
+            clearTimeout(pendingClearTimeoutRef.current);
+            pendingClearTimeoutRef.current = null;
+          }
+          setAuthPending(false);
+          setProfile(ensured);
+          setFirebaseUser(user);
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error("Failed to ensure user document or set cookie", error);
+        if (authEventId === authEventIdRef.current) {
+          setAuthError(getAuthErrorMessage(error));
+          recoveringSessionRef.current = true;
+          cookieSyncStateRef.current = initialCookieSyncState;
+          setFirebaseUser(null);
+          setProfile(null);
+          setAuthPending(false);
+          setLoading(false);
+          if (hasCookieRef.current) {
+            hasCookieRef.current = false;
+            try {
+              await fetch("/api/auth/cookie", { method: "DELETE" });
+            } catch {
+              /* best effort */
+            }
+          }
+          try {
+            await signOut(auth);
+          } finally {
+            recoveringSessionRef.current = false;
+          }
+        }
+      } finally {
+        userSessionSyncInFlightRef.current -= 1;
+      }
+    };
+
     const initAuth = async () => {
       const pendingUntil = readAuthPendingExpiry();
       const hasPendingSignIn = pendingUntil > Date.now();
@@ -179,15 +269,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        const result = await getRedirectResult(auth);
-        if (result?.user) {
-          console.log("Redirect result user:", result.user.email);
+        const redirectResult = await consumeRedirectResult(auth);
+        const userAfterRedirect = redirectResult?.user ?? auth.currentUser;
+        if (process.env.NODE_ENV !== "production") {
+          console.info("[auth] after redirect", {
+            redirectUser: redirectResult?.user?.uid ?? null,
+            currentUser: auth.currentUser?.uid ?? null,
+            hostname: window.location.hostname,
+          });
+        }
+        if (userAfterRedirect) {
+          await syncUserSession(userAfterRedirect);
+        } else if (hasPendingSignIn) {
+          setAuthError(
+            `Login não completou. Adicione "${window.location.hostname}" em Firebase Console → Authentication → Domínios autorizados (e tente de novo).`,
+          );
+          setAuthPending(false);
+          setLoading(false);
+          clearAuthPendingExpiry();
         }
       } catch (error) {
         console.error("Error handling redirect result", error);
         setAuthError(getAuthErrorMessage(error));
         setAuthPending(false);
         setLoading(false);
+        clearAuthPendingExpiry();
       }
 
       unsubscribe = onIdTokenChanged(auth, (user) => {
@@ -196,86 +302,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (user) {
-          const authEventId = ++authEventIdRef.current;
-          setAuthError(null);
-          setLoading(true);
-          userSessionSyncInFlightRef.current += 1;
-          void (async () => {
-            try {
-              const tokenResult = await user.getIdTokenResult();
-              const token = tokenResult.token;
-              const tokenExpiry = tokenResult.expirationTime;
-              const nextSyncState = { token, expiration: tokenExpiry };
-              const mustSyncCookie = shouldSyncCookie(
-                cookieSyncStateRef.current,
-                nextSyncState,
-              );
-
-              if (mustSyncCookie) {
-                const cookieResponse = await fetch("/api/auth/cookie", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  credentials: "same-origin",
-                  body: JSON.stringify({ token }),
-                });
-                if (!cookieResponse.ok) {
-                  let detail = `Sessão HTTP ${cookieResponse.status}`;
-                  try {
-                    const body = (await cookieResponse.json()) as {
-                      error?: string;
-                    };
-                    if (body?.error) detail = `${detail}: ${body.error}`;
-                  } catch {
-                    /* ignore */
-                  }
-                  throw new Error(detail);
-                }
-                cookieSyncStateRef.current = nextSyncState;
-                hasCookieRef.current = true;
-              }
-
-              const ensured = await ensureUserDocument(user);
-              if (authEventId === authEventIdRef.current) {
-                if (pendingClearTimeoutRef.current) {
-                  clearTimeout(pendingClearTimeoutRef.current);
-                  pendingClearTimeoutRef.current = null;
-                }
-                setAuthPending(false);
-                setProfile(ensured);
-                // Expose the user and stop loading ONLY after the cookie is securely mapped.
-                // This prevents the page.tsx useEffect from redirecting to /dashboard prematurely
-                // before the middleware in Next.js can read the cookie.
-                setFirebaseUser(user);
-                setLoading(false);
-              }
-            } catch (error) {
-              console.error("Failed to ensure user document or set cookie", error);
-              if (authEventId === authEventIdRef.current) {
-                setAuthError(getAuthErrorMessage(error));
-                recoveringSessionRef.current = true;
-                cookieSyncStateRef.current = initialCookieSyncState;
-                setFirebaseUser(null);
-                setProfile(null);
-                setAuthPending(false);
-                setLoading(false);
-                if (hasCookieRef.current) {
-                  hasCookieRef.current = false;
-                  try {
-                    await fetch("/api/auth/cookie", { method: "DELETE" });
-                  } catch {
-                    // best effort cookie cleanup
-                  }
-                }
-                try {
-                  await signOut(auth);
-                } finally {
-                  recoveringSessionRef.current = false;
-                }
-              }
-            } finally {
-              userSessionSyncInFlightRef.current -= 1;
-            }
-          })();
+          void syncUserSession(user);
         } else {
           if (userSessionSyncInFlightRef.current > 0) {
             return;
@@ -294,8 +321,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setAuthPendingState(true);
             pendingClearTimeoutRef.current = setTimeout(() => {
               if (!getFirebaseAuth().currentUser) {
+                setAuthError(
+                  `Login não completou. Adicione "${window.location.hostname}" em Firebase Console → Authentication → Domínios autorizados.`,
+                );
                 setAuthPending(false);
                 setLoading(false);
+                clearAuthPendingExpiry();
               }
             }, AUTH_PENDING_GRACE_MS);
             return;
@@ -306,7 +337,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     };
 
-    initAuth();
+    void initAuth();
 
     return () => {
       if (pendingClearTimeoutRef.current) {
@@ -322,8 +353,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAuthPending(true);
     setLoading(true);
 
+    const useRedirect = shouldUseRedirectSignIn();
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[auth] signInWithGoogle", {
+        useRedirect,
+        hostname: window.location.hostname,
+      });
+    }
+
     try {
-      if (shouldUseRedirectSignIn()) {
+      if (useRedirect) {
         await signInWithRedirect(auth, googleProvider);
         return;
       }

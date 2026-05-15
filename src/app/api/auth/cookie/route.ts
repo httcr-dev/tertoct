@@ -28,7 +28,31 @@ const DELETE_LIMIT = {
 } as const;
 
 export async function POST(req: Request) {
+  if (process.env.NODE_ENV !== "production") {
+    logServerEvent("info", {
+      route: "/api/auth/cookie",
+      action: "post-received",
+      details: {
+        origin: req.headers.get("origin"),
+        host: req.headers.get("host"),
+        forwardedHost: req.headers.get("x-forwarded-host"),
+      },
+    });
+  }
+
   if (!isTrustedMutationRequest(req)) {
+    logServerEvent("warn", {
+      route: "/api/auth/cookie",
+      action: "forbidden-origin",
+      errorCode: "ORIGIN_FORBIDDEN",
+      details: {
+        origin: req.headers.get("origin"),
+        referer: req.headers.get("referer"),
+        host: req.headers.get("host"),
+        forwardedHost: req.headers.get("x-forwarded-host"),
+        requestUrl: req.url,
+      },
+    });
     return NextResponse.json(
       { success: false, error: "Forbidden origin" },
       { status: 403 },
