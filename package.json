@@ -8,7 +8,7 @@
     "notify": "node scripts/notifyExpiringPlans.js",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "test:coverage": "jest --coverage"
@@ -17,12 +17,12 @@
     "firebase": "^12.9.0",
     "isomorphic-dompurify": "^3.8.0",
     "lucide-react": "^0.577.0",
+    "embla-carousel-react": "^8.6.0",
+    "firebase-admin": "^12.7.0",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-hot-toast": "^2.6.0",
-    "react-slick": "^0.31.0",
-    "slick-carousel": "^1.8.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -36,7 +36,6 @@
     "eslint-config-next": "16.1.6",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.5",
-    "firebase-admin": "^12.7.0",
     "jest": "^30.3.0",
     "prettier": "^3.8.1",
     "tailwindcss": "^4",

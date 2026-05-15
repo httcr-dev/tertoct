@@ -78,9 +78,15 @@ service cloud.firestore {
     }
 
     function isCurrentUserActive() {
-      return !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
-        !('active' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data) ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.active == true;
+      let path = /databases/$(database)/documents/users/$(request.auth.uid);
+      return exists(path) && (
+        !('active' in get(path).data) ||
+        get(path).data.active == true
+      );
+    }
+
+    function currentUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
     function planIsActive(planId) {
@@ -127,6 +133,12 @@ service cloud.firestore {
       allow create, update, delete: if isCoach();
     }
 
+    match /classes/{classId} {
+      // Students need to read classes to select a turma for check-in.
+      allow read: if isSignedIn();
+      allow create, update, delete: if isCoach();
+    }
+
     match /checkins/{checkinId} {
       allow read: if canReadCheckin(resource.data);
 
@@ -137,8 +149,7 @@ service cloud.firestore {
         request.resource.data.userId == request.auth.uid &&
         request.resource.data.planId is string &&
         request.resource.data.weekKey is string &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.planId
-          == request.resource.data.planId &&
+        currentUserData().planId == request.resource.data.planId &&
         get(/databases/$(database)/documents/plans/$(request.resource.data.planId)).data.active
           == true &&
         existsAfter(
@@ -170,21 +181,28 @@ service cloud.firestore {
         ) &&
         // Payment check: allow if no due day is set, payment is marked as paid, or within valid expiration date
         (
-          !('paymentDueDay' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data) ||
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.paymentDueDay == null ||
+          !('paymentDueDay' in currentUserData()) ||
+          currentUserData().paymentDueDay == null ||
           (
-            'monthlyPaymentPaid' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data &&
-            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.monthlyPaymentPaid == true
+            'monthlyPaymentPaid' in currentUserData() &&
+            currentUserData().monthlyPaymentPaid == true
           ) ||
           (
-            'paymentValidUntil' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data &&
-            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.paymentValidUntil != null &&
-            request.time <= get(/databases/$(database)/documents/users/$(request.auth.uid)).data.paymentValidUntil
+            'paymentValidUntil' in currentUserData() &&
+            currentUserData().paymentValidUntil != null &&
+            request.time <= currentUserData().paymentValidUntil
           )
         );
 
       // Check-ins are append-only to manter histórico confiável.
       allow update, delete: if false;
+    }
+
+    match /classCheckinCounters/{counterId} {
+      // Counter docs are operational; only coaches/admins can inspect them.
+      // Students create check-ins via server route (admin SDK), so they don't need direct access.
+      allow read: if isSignedIn();
+      allow create, update, delete: if false;
     }
 
     match /checkinCounters/{counterId} {
@@ -214,7 +232,10 @@ service cloud.firestore {
     }
 
     match /feedbacks/{feedbackId} {
-      allow read: if true;
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        isCoach()
+      );
 
       allow create: if isStudent() &&
         request.resource.data.userId == request.auth.uid &&
@@ -230,12 +251,7 @@ service cloud.firestore {
       allow update: if false;
     }
 
-    // Future collections (classes, enrollments, payments) can be refined later.
-    match /classes/{classId} {
-      allow read: if isCoach();
-      allow create, update, delete: if isCoach();
-    }
-
+    // Future collections (enrollments, payments) can be refined later.
     match /enrollments/{id} {
       allow read: if isCoach();
       allow create, update, delete: if isCoach();
