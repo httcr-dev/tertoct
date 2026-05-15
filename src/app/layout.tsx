@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { headers } from "next/headers";
 import "./globals.css";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { Toaster } from "react-hot-toast";
-
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -20,17 +20,25 @@ export const metadata: Metadata = {
   description: "Check-in system for TertoCT Gym",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const nonce = (await headers()).get("x-nonce") ?? "";
+
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning nonce={nonce || undefined}>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <Toaster position="top-center" toastOptions={{ style: { background: '#18181b', color: '#fff' } }} />
+        <Toaster
+          position="top-center"
+          toastOptions={{
+            style: { background: "#18181b", color: "#fff" },
+            duration: 3200,
+          }}
+        />
         <AuthProvider>{children}</AuthProvider>
 
         <footer className="bg-zinc-900 border-t border-zinc-800 text-zinc-400 py-8 flex flex-col items-center justify-center gap-4 mt-auto relative z-10">

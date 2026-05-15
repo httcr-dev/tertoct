@@ -1,3 +1,16 @@
+function tryParseAllowedOrigin(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  try {
+    const u = new URL(trimmed);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    if (u.username || u.password) return null;
+    return u.origin;
+  } catch {
+    return null;
+  }
+}
+
 export function isTrustedMutationRequest(req: Request): boolean {
   const requestUrl = new URL(req.url);
   const requestOrigin = requestUrl.origin;
@@ -8,9 +21,9 @@ export function isTrustedMutationRequest(req: Request): boolean {
   const envOrigins = process.env.ALLOWED_ORIGINS;
   if (envOrigins) {
     for (const item of envOrigins.split(",")) {
-      const value = item.trim();
-      if (value) {
-        allowedOrigins.add(value);
+      const parsed = tryParseAllowedOrigin(item);
+      if (parsed) {
+        allowedOrigins.add(parsed);
       }
     }
   }

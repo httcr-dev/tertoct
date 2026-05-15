@@ -14,6 +14,15 @@ import { startOfWeek } from "@/lib/utils/date";
 import { createCheckIn, listenCheckinsByUser } from "@/services/checkinService";
 import { fetchActivePlans } from "@/services/landingService";
 import { getPlanById } from "@/services/plansQueryService";
+import { listenActiveClasses, listenClassCountersForDate } from "@/services/classService";
+import type { GymClass } from "@/lib/types";
+import { getDateKeyForOffset, utcDateAtLocalTime } from "@/lib/utils/dateKey";
+import { parseHHmm } from "@/lib/utils/time";
+import {
+  MUTATION_TOAST_MIN_MS,
+  withMinDuration,
+} from "@/lib/utils/withMinDuration";
+import toast from "react-hot-toast";
 import {
   createFeedback,
   deleteFeedback,
@@ -35,6 +44,16 @@ export function StudentDashboard() {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
+  const [classes, setClasses] = useState<GymClass[]>([]);
+  const [selectedClassId, setSelectedClassId] = useState<string>("");
+  const [selectedDateKey, setSelectedDateKey] = useState<string>(() => {
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, "0");
+    const day = String(today.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  });
+  const [classCounts, setClassCounts] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
   const [checkInStatus, setCheckInStatus] = useState<ActionStatus>("idle");
   const [selectedTab, setSelectedTab] = useState<StudentTab>(
@@ -42,6 +61,7 @@ export function StudentDashboard() {
   );
   const [feedbackText, setFeedbackText] = useState("");
   const [feedbackStatus, setFeedbackStatus] = useState<ActionStatus>("idle");
+  const [deletingFeedbackId, setDeletingFeedbackId] = useState<string | null>(null);
   const [myFeedbacks, setMyFeedbacks] = useState<Feedback[]>([]);
 
   const handleTabChange = useCallback((tab: StudentTab) => {
@@ -54,6 +74,8 @@ export function StudentDashboard() {
   useEffect(() => {
     let unsubCheckins: (() => void) | undefined;
     let unsubFeedbacks: (() => void) | undefined;
+    let unsubClasses: (() => void) | undefined;
+    let unsubCounters: (() => void) | undefined;
 
     const load = async () => {
       if (!profile) return;
@@ -72,6 +94,20 @@ export function StudentDashboard() {
 
       // Real-time check-ins listener
       unsubCheckins = listenCheckinsByUser(profile.id, setCheckIns);
+
+      // Real-time classes listener
+      unsubClasses = listenActiveClasses((next) => {
+        setClasses(next);
+        setSelectedClassId((prev) => prev || next[0]?.id || "");
+      });
+
+      // Load class counters for the initially selected date (today)
+      const todayKey = getDateKeyForOffset(new Date(), -180);
+      unsubCounters = listenClassCountersForDate(
+        todayKey,
+        (counts) => setClassCounts(counts),
+        () => setClassCounts(new Map()),
+      );
 
       // My feedbacks listener
       unsubFeedbacks = listenMyFeedbacks(profile.id, setMyFeedbacks);
@@ -95,8 +131,23 @@ export function StudentDashboard() {
     return () => {
       unsubCheckins?.();
       unsubFeedbacks?.();
+      unsubClasses?.();
+      unsubCounters?.();
     };
   }, [profile]);
+
+  // ── Listen to selected date changes ─────────────────────────────────────
+  useEffect(() => {
+    const unsubCounters: (() => void) | undefined = listenClassCountersForDate(
+      selectedDateKey,
+      (counts) => setClassCounts(counts),
+      () => setClassCounts(new Map()),
+    );
+
+    return () => {
+      unsubCounters?.();
+    };
+  }, [selectedDateKey]);
 
   // ── Derived state ────────────────────────────────────────────────────
   const currentWeekInfo = useMemo(() => {
@@ -122,23 +173,82 @@ export function StudentDashboard() {
     currentWeekInfo &&
     currentWeekInfo.remaining > 0 &&
     plan.active &&
-    !paymentOverdue
+    !paymentOverdue &&
+    selectedClassId
+  );
+
+  const selectedClass = useMemo(
+    () => classes.find((c) => c.id === selectedClassId) ?? null,
+    [classes, selectedClassId],
+  );
+
+  const todayKey = useMemo(() => getDateKeyForOffset(new Date(), -180), []);
+
+  const isSelectedDateToday = useMemo(() => selectedDateKey === todayKey, [selectedDateKey, todayKey]);
+
+  const selectedClassRemaining = useMemo(() => {
+    if (!selectedClass) return null;
+    const current = classCounts.get(selectedClass.id) ?? 0;
+    return Math.max(selectedClass.capacity - current, 0);
+  }, [classCounts, selectedClass]);
+
+  const selectedClassWindowOpen = useMemo(() => {
+    if (!selectedClass) return false;
+    // If it's not today, we don't need to check the deadline
+    if (!isSelectedDateToday) return true;
+    const deadlineMinutes = parseHHmm(selectedClass.checkinDeadlineTime);
+    if (deadlineMinutes == null) return false;
+    const deadlineAt = utcDateAtLocalTime(selectedDateKey, deadlineMinutes, -180);
+    return Date.now() <= deadlineAt.getTime();
+  }, [selectedClass, selectedDateKey, isSelectedDateToday]);
+
+  const alreadyCheckedInThisClassOnDate = useMemo(() => {
+    if (!selectedClass) return false;
+    return checkIns.some(
+      (c) => c.classId === selectedClass.id && c.classDateKey === selectedDateKey,
+    );
+  }, [checkIns, selectedClass, selectedDateKey]);
+
+  const canCheckInForClass = !!(
+    canCheckIn &&
+    selectedClass &&
+    selectedClassRemaining != null &&
+    selectedClassRemaining > 0 &&
+    selectedClassWindowOpen &&
+    !alreadyCheckedInThisClassOnDate
   );
 
   // ── Check-in handler ─────────────────────────────────────────────────
   const handleCheckIn = useCallback(async () => {
     if (!profile || !plan || !canCheckIn || checkInStatus === "loading") return;
+    const classId = selectedClassId;
+    if (!classId) return;
+    if (!canCheckInForClass) return;
 
     setCheckInStatus("loading");
     try {
-      await createCheckIn(profile.id, plan.id);
+      const dateToSend = isSelectedDateToday ? undefined : selectedDateKey;
+      await toast.promise(
+        withMinDuration(
+          createCheckIn(profile.id, plan.id, classId, dateToSend),
+          MUTATION_TOAST_MIN_MS,
+        ),
+        {
+          loading: "Registrando check-in...",
+          success: "Check-in registrado!",
+          error: (err) =>
+            err instanceof Error
+              ? err.message
+              : "Falha no check-in, tente novamente.",
+        },
+      );
       setCheckInStatus("success");
       setTimeout(() => setCheckInStatus("idle"), 2600);
     } catch {
       setCheckInStatus("error");
       setTimeout(() => setCheckInStatus("idle"), 2600);
     }
-  }, [profile, plan, canCheckIn, checkInStatus]);
+  }, [profile, plan, canCheckIn, checkInStatus, selectedClassId, canCheckInForClass]);
 
   // ── Feedback handler ───────────────────────────────────────────────
   const handleSendFeedback = useCallback(async () => {
@@ -148,11 +258,21 @@ export function StudentDashboard() {
 
     setFeedbackStatus("loading");
     try {
-      await createFeedback({
-        userId: profile.id,
-        userName: profile.name ?? null,
-        message: msg,
-      });
+      await toast.promise(
+        withMinDuration(
+          createFeedback({
+            userId: profile.id,
+            userName: profile.name ?? null,
+            message: msg,
+          }),
+          MUTATION_TOAST_MIN_MS,
+        ),
+        {
+          loading: "Enviando feedback...",
+          success: "Feedback enviado!",
+          error: "Erro ao enviar. Tente novamente.",
+        },
+      );
       setFeedbackText("");
       setFeedbackStatus("success");
       setTimeout(() => setFeedbackStatus("idle"), 2600);
@@ -180,6 +300,8 @@ export function StudentDashboard() {
               width={40}
               height={40}
               className="object-contain"
+              priority
+              sizes="40px"
             />
             <span className="font-semibold text-zinc-100 tracking-wide text-lg">
               TertoCT
@@ -253,6 +375,7 @@ export function StudentDashboard() {
                     className="h-8 w-8 rounded-full object-cover border border-zinc-700/50 shadow-sm shadow-amber-500/20 block"
                     referrerPolicy="no-referrer"
                     unoptimized
+                  loading="lazy"
                   />
                 )}
                 Olá, {profile?.name?.split(" ")[0] ?? "aluno"}.
@@ -376,10 +499,10 @@ export function StudentDashboard() {
               <section className="space-y-4">
                 <h3 className="text-lg font-semibold text-zinc-100 flex items-center gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-                  Sua Atividade (14 dias)
+                  Sua Atividade (semana atual)
                 </h3>
                 <div className="rounded-3xl border border-zinc-800/60 bg-zinc-900/30 p-6 backdrop-blur-sm shadow-inner shadow-amber-500/5">
-                  <BarChart dataItems={checkIns} ds={14} />
+                  <BarChart dataItems={checkIns} range="week" />
                 </div>
               </section>
 
@@ -438,7 +561,10 @@ export function StudentDashboard() {
                     Pronto para o treino?
                   </h2>
                   <p className="text-zinc-400">
-                    Confirme sua presença na aula de hoje abaixo.
+                    {isSelectedDateToday 
+                      ? "Confirme sua presença na aula de hoje abaixo."
+                      : `Faça seu check-in para ${new Date(selectedDateKey + 'T00:00:00').toLocaleDateString('pt-BR')}.`
+                    }
                   </p>
                 </div>
 
@@ -447,6 +573,52 @@ export function StudentDashboard() {
 
                   {currentWeekInfo && (
                     <div className="relative z-10 space-y-6">
+                      <div className="space-y-2">
+                        <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">
+                          Data do Check-in
+                        </p>
+                        <input
+                          type="date"
+                          className="w-full cursor-pointer rounded-xl border border-zinc-800 bg-black/30 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-amber-500/40"
+                          value={selectedDateKey}
+                          min={todayKey}
+                          onChange={(e) => setSelectedDateKey(e.target.value)}
+                        />
+                        {!isSelectedDateToday && (
+                          <p className="text-xs text-amber-400">
+                            Check-in para {new Date(selectedDateKey + 'T00:00:00').toLocaleDateString('pt-BR')}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">
+                          Escolha a turma
+                        </p>
+                        <select
+                          className="w-full cursor-pointer rounded-xl border border-zinc-800 bg-black/30 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-amber-500/40 disabled:opacity-50"
+                          value={selectedClassId}
+                          onChange={(e) => setSelectedClassId(e.target.value)}
+                          disabled={classes.length === 0}
+                        >
+                          {classes.length === 0 ? (
+                            <option value="">Nenhuma turma disponível</option>
+                          ) : (
+                            classes.map((c) => {
+                              const remaining = Math.max(
+                                c.capacity - (classCounts.get(c.id) ?? 0),
+                                0,
+                              );
+                              return (
+                                <option key={c.id} value={c.id}>
+                                  {c.name} • {c.startTime} (check-in até {c.checkinDeadlineTime}) • {remaining}/{c.capacity} vagas
+                                </option>
+                              );
+                            })
+                          )}
+                        </select>
+                      </div>
+
                       <div className="flex justify-center gap-4">
                         <div className="px-4 py-2 rounded-2xl bg-zinc-800/50 border border-zinc-700/50">
                           <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">
@@ -468,9 +640,9 @@ export function StudentDashboard() {
 
                       <button
                         onClick={handleCheckIn}
-                        disabled={!canCheckIn || checkInStatus === "loading"}
+                        disabled={!canCheckInForClass || checkInStatus === "loading"}
                         className={`w-full py-6 rounded-[30px] text-lg font-bold transition-all transform active:scale-95 shadow-2xl ${
-                          canCheckIn && checkInStatus !== "loading"
+                          canCheckInForClass && checkInStatus !== "loading"
                             ? "bg-amber-500 text-black hover:bg-amber-400 shadow-amber-500/20 cursor-pointer"
                             : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
                         }`}
@@ -482,16 +654,30 @@ export function StudentDashboard() {
                           </span>
                         ) : !plan ? (
                           "Aguardando Plano"
+                        ) : !selectedClassId ? (
+                          "Selecione uma turma"
+                        ) : alreadyCheckedInThisClassOnDate ? (
+                          "Check-in já realizado"
                         ) : !plan.active ? (
                           "Plano Inativo"
                         ) : paymentOverdue ? (
                           "Mensalidade Pendente"
-                        ) : canCheckIn ? (
+                        ) : !selectedClassWindowOpen ? (
+                          isSelectedDateToday ? "Check-in encerrado" : "Horário de check-in passou"
+                        ) : selectedClassRemaining != null && selectedClassRemaining <= 0 ? (
+                          "Turma lotada"
+                        ) : canCheckInForClass ? (
                           "REALIZAR CHECK-IN"
                         ) : (
                           "Limite atingido"
                         )}
                       </button>
+
+                      {!isSelectedDateToday && canCheckInForClass && (
+                        <p className="text-xs text-zinc-500 bg-zinc-800/20 px-3 py-2 rounded-lg">
+                          ✓ Check-in antecipado: não há validação de horário para datas futuras
+                        </p>
+                      )}
 
                       <div className="flex justify-center">
                         <StatusBadge
@@ -507,12 +693,26 @@ export function StudentDashboard() {
                             ? "Mensalidade pendente. Procure seu professor para regularizar."
                             : !plan
                               ? "Seu perfil não possui um plano associado."
+                              : !selectedClassId
+                                ? "Selecione uma turma para fazer check-in."
                               : !plan.active
                                 ? "Este plano está desativado pela administração."
                                 : currentWeekInfo &&
                                     currentWeekInfo.remaining <= 0
                                   ? "Você atingiu o limite de check-ins para esta semana."
                                   : "Não é possível fazer check-in no momento."}
+                        </p>
+                      )}
+
+                      {canCheckIn && checkInStatus === "idle" && !canCheckInForClass && (
+                        <p className="text-red-400/80 text-xs font-medium bg-red-500/5 py-2 rounded-full border border-red-500/10">
+                          {alreadyCheckedInThisClassOnDate
+                            ? `Você já fez check-in nessa turma para ${new Date(selectedDateKey + 'T00:00:00').toLocaleDateString('pt-BR')}.`
+                            : !selectedClassWindowOpen
+                              ? "Passou do horário máximo de check-in."
+                              : selectedClassRemaining != null && selectedClassRemaining <= 0
+                                ? "Turma lotada (sem vagas)."
+                                : "Não é possível fazer check-in agora."}
                         </p>
                       )}
                     </div>
@@ -645,12 +845,33 @@ export function StudentDashboard() {
                               </p>
                             </div>
                             <button
+                              type="button"
                               onClick={async () => {
-                                await deleteFeedback(f.id);
+                                setDeletingFeedbackId(f.id);
+                                try {
+                                  await toast.promise(
+                                    withMinDuration(
+                                      deleteFeedback(f.id),
+                                      MUTATION_TOAST_MIN_MS,
+                                    ),
+                                    {
+                                      loading: "Removendo feedback...",
+                                      success: "Feedback removido",
+                                      error: "Não foi possível apagar",
+                                    },
+                                  );
+                                } finally {
+                                  setDeletingFeedbackId(null);
+                                }
                               }}
-                              className="shrink-0 inline-flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-300 hover:text-zinc-100 hover:border-amber-500/20 transition cursor-pointer"
+                              disabled={deletingFeedbackId === f.id}
+                              className="shrink-0 inline-flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-300 hover:text-zinc-100 hover:border-amber-500/20 transition cursor-pointer disabled:pointer-events-none disabled:opacity-50"
                             >
-                              <Trash2 className="h-4 w-4" />
+                              {deletingFeedbackId === f.id ? (
+                                <span className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-500 border-t-transparent" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
                               Apagar
                             </button>
                           </div>

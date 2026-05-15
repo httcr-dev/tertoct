@@ -7,18 +7,31 @@ import {
   logServerEvent,
   trackStatusAnomaly,
 } from "@/lib/observability/serverObservability";
+import { checkProxyRateLimit } from "@/lib/proxy/proxyRateLimit";
 
 function generateNonce(): string {
   return crypto.randomUUID();
 }
 
+function isLikelyHttps(req: NextRequest): boolean {
+  return (
+    req.nextUrl.protocol === "https:" ||
+    req.headers.get("x-forwarded-proto") === "https"
+  );
+}
+
 function buildCsp(nonce: string): string {
+  const isDev = process.env.NODE_ENV !== "production";
+  const scriptSrc = isDev
+    ? "'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://accounts.google.com https://va.vercel-scripts.com"
+    : `'self' 'nonce-${nonce}' 'strict-dynamic' https://apis.google.com https://accounts.google.com https://va.vercel-scripts.com`;
+
   return [
     "default-src 'self'",
-    `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://accounts.google.com https://va.vercel-scripts.com`,
+    `script-src ${scriptSrc}`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: https: blob:",
-    "connect-src 'self' https: *.google-analytics.com",
+    "connect-src 'self' https: *.google-analytics.com https://*.googleapis.com https://*.gstatic.com https://*.firebaseio.com https://*.cloudfunctions.net wss://*.firebaseio.com",
     "frame-src https://accounts.google.com https://*.firebaseapp.com",
     "font-src 'self' data: https://fonts.gstatic.com",
     "base-uri 'self'",
@@ -30,11 +43,22 @@ function buildCsp(nonce: string): string {
 function withSecurityHeaders(
   response: NextResponse,
   nonce: string,
+  req?: NextRequest,
 ): NextResponse {
   response.headers.set("Content-Security-Policy", buildCsp(nonce));
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.headers.set(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=()",
+  );
+  if (req && isLikelyHttps(req)) {
+    response.headers.set(
+      "Strict-Transport-Security",
+      "max-age=63072000; includeSubDomains; preload",
+    );
+  }
   response.headers.set("x-nonce", nonce);
   return response;
 }
@@ -49,18 +73,35 @@ function isApiPath(pathname: string) {
   return pathname.startsWith("/api/");
 }
 
+function rateLimitedResponse(req: NextRequest, nonce: string) {
+  if (isApiPath(req.nextUrl.pathname)) {
+    return withSecurityHeaders(
+      NextResponse.json({ error: "Too many requests" }, { status: 429 }),
+      nonce,
+      req,
+    );
+  }
+  return withSecurityHeaders(
+    NextResponse.json({ error: "Too many requests" }, { status: 429 }),
+    nonce,
+    req,
+  );
+}
+
 function unauthenticatedResponse(req: NextRequest, nonce: string) {
   if (isApiPath(req.nextUrl.pathname)) {
     trackStatusAnomaly(req.nextUrl.pathname, 401);
     return withSecurityHeaders(
       NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
       nonce,
+      req,
     );
   }
 
   return withSecurityHeaders(
     NextResponse.redirect(new URL("/", req.url)),
     nonce,
+    req,
   );
 }
 
@@ -70,12 +111,14 @@ function forbiddenResponse(req: NextRequest, nonce: string) {
     return withSecurityHeaders(
       NextResponse.json({ error: "Forbidden" }, { status: 403 }),
       nonce,
+      req,
     );
   }
 
   return withSecurityHeaders(
     NextResponse.redirect(new URL("/dashboard", req.url)),
     nonce,
+    req,
   );
 }
 
@@ -86,10 +129,16 @@ export async function proxy(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
   const isProtected = isProtectedPath(pathname);
 
+  const publicRl = checkProxyRateLimit(req);
+  if (!publicRl.allowed) {
+    return rateLimitedResponse(req, nonce);
+  }
+
   if (!isProtected) {
     return withSecurityHeaders(
       NextResponse.next({ request: { headers: requestHeaders } }),
       nonce,
+      req,
     );
   }
 
@@ -117,6 +166,7 @@ export async function proxy(req: NextRequest) {
     return withSecurityHeaders(
       NextResponse.next({ request: { headers: requestHeaders } }),
       nonce,
+      req,
     );
   } catch (error) {
     captureServerError(error, {

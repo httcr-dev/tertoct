@@ -28,6 +28,7 @@ jest.mock("@/lib/firebase", () => ({
 import {
   createFeedback,
   deleteFeedback,
+  fetchPublicFeedbacks,
   listenMyFeedbacks,
   listenPublicFeedbacks,
 } from "./feedbackService";
@@ -106,6 +107,25 @@ describe("feedbackService", () => {
     expect(onData).toHaveBeenCalledWith([
       expect.objectContaining({ id: "b", message: "2" }),
       expect.objectContaining({ id: "a", message: "1" }),
+    ]);
+  });
+
+  it("fetches public feedbacks from API", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        items: [{ id: "1", userName: "A", message: "hi", createdAtMs: 1 }],
+      }),
+    });
+
+    const items = await fetchPublicFeedbacks();
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/public/feedbacks",
+      expect.objectContaining({ cache: "no-store" }),
+    );
+    expect(items).toEqual([
+      { id: "1", userName: "A", message: "hi", createdAtMs: 1 },
     ]);
   });
 

@@ -45,7 +45,23 @@ export interface CheckIn {
   id: string;
   userId: string;
   planId: string;
+  classId?: string | null;
+  classDateKey?: string | null; // YYYY-MM-DD in class local offset
+  className?: string | null;
+  classStartTime?: string | null;
   createdAt: Date;
+}
+
+export interface GymClass {
+  id: string;
+  name: string;
+  startTime: string; // HH:mm (local to utcOffsetMinutes)
+  checkinDeadlineTime: string; // HH:mm (local to utcOffsetMinutes)
+  capacity: number;
+  utcOffsetMinutes: number; // fixed to São Paulo (UTC-3) in UI
+  active: boolean;
+  createdBy: string;
+  createdAt?: Date | null;
 }
 
 export interface StudentSummary {

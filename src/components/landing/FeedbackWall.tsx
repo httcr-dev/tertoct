@@ -1,14 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { listenPublicFeedbacks, type Feedback } from "@/services/feedbackService";
+import {
+  fetchPublicFeedbacks,
+  type PublicFeedbackItem,
+} from "@/services/feedbackService";
 
 export function FeedbackWall() {
-  const [items, setItems] = useState<Feedback[]>([]);
+  const [items, setItems] = useState<PublicFeedbackItem[]>([]);
 
   useEffect(() => {
-    const unsub = listenPublicFeedbacks(setItems, () => setItems([]));
-    return () => unsub();
+    let cancelled = false;
+    fetchPublicFeedbacks()
+      .then((data) => {
+        if (!cancelled) setItems(data);
+      })
+      .catch(() => {
+        if (!cancelled) setItems([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (items.length === 0) return null;
@@ -47,4 +59,3 @@ export function FeedbackWall() {
     </section>
   );
 }
-

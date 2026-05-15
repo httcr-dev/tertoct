@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAdminFirestore } from "@/lib/auth/admin";
+import { enforcePrivateApiRateLimit } from "@/lib/auth/privateApiRateLimit";
 import { getPrivateRouteContext, requireRole } from "@/lib/auth/privateRoute";
 import { validateBody } from "@/lib/validations/validateRoute";
 import { isTrustedMutationRequest } from "@/lib/security/origin";
@@ -21,6 +22,9 @@ export async function POST(req: Request) {
   if (!auth.ok) return auth.response;
   const forbidden = requireRole(auth.context, ["student"]);
   if (forbidden) return forbidden;
+
+  const rateLimited = await enforcePrivateApiRateLimit(req, auth.context.session.uid);
+  if (rateLimited) return rateLimited;
 
   const { data, errorResponse } = await validateBody(req, createFeedbackSchema);
   if (errorResponse) return errorResponse;

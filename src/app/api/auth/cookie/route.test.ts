@@ -9,7 +9,10 @@ const mockCookies = jest.fn(async () => ({
 
 const mockVerifyToken = jest.fn();
 const mockGetClientIdentifier = jest.fn(async () => "127.0.0.1");
-const mockCheckRateLimitMemory = jest.fn(() => ({ allowed: true }));
+const mockCheckRateLimitMemory = jest.fn((...args: any[]) => {
+  void args;
+  return { allowed: true };
+});
 
 jest.mock("next/headers", () => ({
   cookies: () => mockCookies(),

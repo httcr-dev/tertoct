@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdminFirestore } from "@/lib/auth/admin";
+import { enforcePrivateApiRateLimit } from "@/lib/auth/privateApiRateLimit";
 import { getPrivateRouteContext, requireRole } from "@/lib/auth/privateRoute";
 import { isTrustedMutationRequest } from "@/lib/security/origin";
 
@@ -17,6 +18,9 @@ export async function POST(
   if (!auth.ok) return auth.response;
   const forbidden = requireRole(auth.context, ["coach", "admin"]);
   if (forbidden) return forbidden;
+
+  const rateLimited = await enforcePrivateApiRateLimit(req, auth.context.session.uid);
+  if (rateLimited) return rateLimited;
 
   const { planId } = await params;
   const ref = getAdminFirestore().collection("plans").doc(planId);

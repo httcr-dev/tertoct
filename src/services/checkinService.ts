@@ -15,14 +15,32 @@ import { mapCheckin } from "@/lib/firestore/mappers";
 export async function createCheckIn(
   _userId: string,
   planId: string,
+  classId: string,
+  classDateKey?: string,
 ): Promise<void> {
+  const body: { planId: string; classId: string; classDateKey?: string } = {
+    planId,
+    classId,
+  };
+  
+  if (classDateKey) {
+    body.classDateKey = classDateKey;
+  }
+  
   const response = await fetch("/api/private/checkins", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ planId }),
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
-    throw new Error("Check-in failed");
+    let message = "Falha no check-in";
+    try {
+      const body = (await response.json()) as { error?: string };
+      if (body?.error) message = body.error;
+    } catch {
+      // ignore
+    }
+    throw new Error(message);
   }
 }
 

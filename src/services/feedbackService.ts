@@ -18,6 +18,20 @@ export interface Feedback {
   createdAt?: Timestamp;
 }
 
+export type PublicFeedbackItem = {
+  id: string;
+  userName: string | null;
+  message: string;
+  createdAtMs: number | null;
+};
+
+export async function fetchPublicFeedbacks(): Promise<PublicFeedbackItem[]> {
+  const res = await fetch("/api/public/feedbacks", { cache: "no-store" });
+  if (!res.ok) return [];
+  const body = (await res.json()) as { items?: PublicFeedbackItem[] };
+  return Array.isArray(body.items) ? body.items : [];
+}
+
 function feedbacksCol() {
   return collection(getFirestoreDb(), "feedbacks");
 }
@@ -77,6 +91,9 @@ export function listenMyFeedbacks(
   );
 }
 
+/**
+ * @deprecated Prefer {@link fetchPublicFeedbacks} — Firestore rules no longer allow anonymous reads.
+ */
 export function listenPublicFeedbacks(
   onData: (items: Feedback[]) => void,
   onError?: (error: unknown) => void,

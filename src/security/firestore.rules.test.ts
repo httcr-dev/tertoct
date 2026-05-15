@@ -101,6 +101,15 @@ describeRules("firestore.rules security", () => {
         active: true,
         classesPerWeek: 3,
       });
+      await setDoc(doc(adminDb, "classes", "class_1"), {
+        active: true,
+        name: "Turma 07:00",
+        startTime: "07:00",
+        checkinDeadlineTime: "06:30",
+        capacity: 20,
+        utcOffsetMinutes: -180,
+        createdBy: "coach_1",
+      });
     });
 
     const db = testEnv.authenticatedContext("student_1").firestore();
@@ -113,6 +122,8 @@ describeRules("firestore.rules security", () => {
     batch.set(doc(db, "checkins", "checkin_1"), {
       userId: "student_1",
       planId: "plan_1",
+      classId: "class_1",
+      classDateKey: "2026-04-15",
       weekKey: "2026-W16",
     });
 
@@ -133,6 +144,15 @@ describeRules("firestore.rules security", () => {
         active: true,
         classesPerWeek: 3,
       });
+      await setDoc(doc(adminDb, "classes", "class_1"), {
+        active: true,
+        name: "Turma 07:00",
+        startTime: "07:00",
+        checkinDeadlineTime: "06:30",
+        capacity: 20,
+        utcOffsetMinutes: -180,
+        createdBy: "coach_1",
+      });
     });
 
     const db = testEnv.authenticatedContext("student_1").firestore();
@@ -145,9 +165,58 @@ describeRules("firestore.rules security", () => {
     batch.set(doc(db, "checkins", "checkin_2"), {
       userId: "student_1",
       planId: "plan_1",
+      classId: "class_1",
+      classDateKey: "2026-04-15",
       weekKey: "2026-W16",
     });
 
     await assertFails(batch.commit());
+  });
+
+  it("allows signed-in student to read classes", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "users", "student_1"), {
+        role: "student",
+        name: "Student",
+        active: true,
+        planId: "plan_1",
+        monthlyPaymentPaid: true,
+      });
+      await setDoc(doc(context.firestore(), "classes", "class_1"), {
+        active: true,
+        name: "Turma 07:00",
+        startTime: "07:00",
+        checkinDeadlineTime: "06:30",
+        capacity: 20,
+        utcOffsetMinutes: -180,
+        createdBy: "coach_1",
+      });
+    });
+
+    const db = testEnv.authenticatedContext("student_1").firestore();
+    await assertSucceeds(getDoc(doc(db, "classes", "class_1")));
+  });
+
+  it("allows signed-in student to read classCheckinCounters", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const adminDb = context.firestore();
+      await setDoc(doc(adminDb, "users", "student_1"), {
+        role: "student",
+        name: "Student",
+        active: true,
+        planId: "plan_1",
+        monthlyPaymentPaid: true,
+      });
+      await setDoc(doc(adminDb, "classCheckinCounters", "class_1_2026-04-15"), {
+        classId: "class_1",
+        classDateKey: "2026-04-15",
+        count: 10,
+      });
+    });
+
+    const db = testEnv.authenticatedContext("student_1").firestore();
+    await assertSucceeds(
+      getDoc(doc(db, "classCheckinCounters", "class_1_2026-04-15")),
+    );
   });
 });

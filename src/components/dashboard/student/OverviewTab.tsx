@@ -112,10 +112,10 @@ export function OverviewTab({
       <section className="space-y-4">
         <h3 className="text-lg font-semibold text-zinc-100 flex items-center gap-2">
           <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-          Sua Atividade (14 dias)
+          Sua Atividade (semana atual)
         </h3>
         <div className="rounded-3xl border border-zinc-800/60 bg-zinc-900/30 p-6 backdrop-blur-sm shadow-inner shadow-amber-500/5">
-          <BarChart dataItems={checkIns} ds={14} />
+          <BarChart dataItems={checkIns} range="week" />
         </div>
       </section>
 

@@ -5,8 +5,10 @@ export const collections = {
   users: "users",
   publicProfiles: "publicProfiles",
   plans: "plans",
+  classes: "classes",
   checkins: "checkins",
   checkinCounters: "checkinCounters",
+  classCheckinCounters: "classCheckinCounters",
 } as const;
 
 export function usersCol() {
@@ -33,6 +35,14 @@ export function planDoc(planId: string) {
   return doc(getFirestoreDb(), collections.plans, planId);
 }
 
+export function classesCol() {
+  return collection(getFirestoreDb(), collections.classes);
+}
+
+export function classDoc(classId: string) {
+  return doc(getFirestoreDb(), collections.classes, classId);
+}
+
 export function checkinsCol() {
   return collection(getFirestoreDb(), collections.checkins);
 }
@@ -43,5 +53,13 @@ export function checkinDoc(checkinId: string) {
 
 export function checkinCounterDoc(counterId: string) {
   return doc(getFirestoreDb(), collections.checkinCounters, counterId);
+}
+
+export function classCheckinCounterDoc(counterId: string) {
+  return doc(getFirestoreDb(), collections.classCheckinCounters, counterId);
+}
+
+export function classCheckinCountersCol() {
+  return collection(getFirestoreDb(), collections.classCheckinCounters);
 }
 

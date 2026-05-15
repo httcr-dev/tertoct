@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdminFirestore } from "@/lib/auth/admin";
+import { enforcePrivateApiRateLimit } from "@/lib/auth/privateApiRateLimit";
 import { getPrivateRouteContext } from "@/lib/auth/privateRoute";
 import { isTrustedMutationRequest } from "@/lib/security/origin";
 
@@ -15,6 +16,9 @@ export async function DELETE(
 
   const auth = await getPrivateRouteContext();
   if (!auth.ok) return auth.response;
+
+  const rateLimited = await enforcePrivateApiRateLimit(req, auth.context.session.uid);
+  if (rateLimited) return rateLimited;
 
   const { feedbackId } = await params;
   const ref = getAdminFirestore().collection("feedbacks").doc(feedbackId);

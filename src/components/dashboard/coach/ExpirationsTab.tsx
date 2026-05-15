@@ -3,6 +3,11 @@
 import { useMemo, useState } from "react";
 import type { Plan, StudentSummary } from "@/lib/types";
 import { MessageCircle, Save } from "lucide-react";
+import toast from "react-hot-toast";
+import {
+  MUTATION_TOAST_MIN_MS,
+  withMinDuration,
+} from "@/lib/utils/withMinDuration";
 
 interface ExpirationsTabProps {
   students: StudentSummary[];
@@ -41,8 +46,14 @@ export function ExpirationsTab({
       const student = students.find((s) => s.id === id);
       const phoneValue = phoneInputs[id] !== undefined ? phoneInputs[id] : (student?.phone || "");
       const phone = phoneValue.trim() || null;
-      await updateUserPhone(id, phone);
-      // Optional: show a success toast here
+      await toast.promise(
+        withMinDuration(updateUserPhone(id, phone), MUTATION_TOAST_MIN_MS),
+        {
+          loading: "Salvando telefone...",
+          success: "Telefone atualizado!",
+          error: "Não foi possível salvar o telefone",
+        },
+      );
     } catch (error) {
       console.error("Failed to save phone", error);
     } finally {

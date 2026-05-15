@@ -14,7 +14,7 @@ export async function checkRateLimit(
   const now = Date.now();
   const windowStart = Math.floor(now / options.windowMs) * options.windowMs;
   const resetAt = windowStart + options.windowMs;
-  const docId = `${key}:${windowStart}`;
+  const docId = `${key.replace(/\//g, '_')}:${windowStart}`;
   const ref = getAdminFirestore().collection("_rateLimits").doc(docId);
 
   try {

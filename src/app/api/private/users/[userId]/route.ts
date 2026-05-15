@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAdminFirestore } from "@/lib/auth/admin";
+import { enforcePrivateApiRateLimit } from "@/lib/auth/privateApiRateLimit";
 import { getPrivateRouteContext, requireRole } from "@/lib/auth/privateRoute";
 import { validateBody } from "@/lib/validations/validateRoute";
 import { isTrustedMutationRequest } from "@/lib/security/origin";
@@ -43,6 +44,9 @@ export async function PATCH(
     console.warn("[users PATCH] 403 Forbidden. User context:", auth.context);
     return forbidden;
   }
+
+  const rateLimited = await enforcePrivateApiRateLimit(req, auth.context.session.uid);
+  if (rateLimited) return rateLimited;
 
   const { userId } = await params;
   const { data, errorResponse } = await validateBody(req, payloadSchema);

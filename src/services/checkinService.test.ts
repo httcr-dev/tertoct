@@ -46,7 +46,7 @@ beforeEach(() => {
 
 describe("createCheckIn", () => {
   it("creates check-in through private API", async () => {
-    await createCheckIn("user-1", "plan-1");
+    await createCheckIn("user-1", "plan-1", "class-1");
 
     expect(global.fetch).toHaveBeenCalledWith(
       "/api/private/checkins",

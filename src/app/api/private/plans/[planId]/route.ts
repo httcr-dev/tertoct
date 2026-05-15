@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAdminFirestore } from "@/lib/auth/admin";
+import { enforcePrivateApiRateLimit } from "@/lib/auth/privateApiRateLimit";
 import { getPrivateRouteContext, requireRole } from "@/lib/auth/privateRoute";
 import { validateBody } from "@/lib/validations/validateRoute";
 import { isTrustedMutationRequest } from "@/lib/security/origin";
@@ -28,6 +29,9 @@ export async function PATCH(
   const forbidden = requireRole(auth.context, ["coach", "admin"]);
   if (forbidden) return forbidden;
 
+  const rateLimited = await enforcePrivateApiRateLimit(req, auth.context.session.uid);
+  if (rateLimited) return rateLimited;
+
   const { planId } = await params;
   const { data, errorResponse } = await validateBody(req, updatePlanSchema);
   if (errorResponse) return errorResponse;
@@ -51,6 +55,9 @@ export async function DELETE(
   if (!auth.ok) return auth.response;
   const forbidden = requireRole(auth.context, ["coach", "admin"]);
   if (forbidden) return forbidden;
+
+  const rateLimited = await enforcePrivateApiRateLimit(req, auth.context.session.uid);
+  if (rateLimited) return rateLimited;
 
   const { planId } = await params;
   const linkedUsers = await getAdminFirestore()

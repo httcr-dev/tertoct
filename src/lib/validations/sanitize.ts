@@ -8,7 +8,7 @@ export function sanitizeHtml(input: string | null | undefined): string {
   if (typeof input !== 'string') return '';
   return DOMPurify.sanitize(input, {
     ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'a', 'p', 'br', 'ul', 'li', 'ol'],
-    ALLOWED_ATTR: ['href', 'target', 'rel'],
+    ALLOWED_ATTR: ['href', 'rel'],
   }).trim();
 }
 

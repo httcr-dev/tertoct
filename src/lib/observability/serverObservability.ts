@@ -10,6 +10,7 @@ type LogContext = {
 };
 
 const statusEvents = new Map<string, number[]>();
+/** Best-effort per-process window; resets on cold start in serverless. */
 const ALERT_WINDOW_MS = 5 * 60 * 1000;
 const ALERT_THRESHOLD = 20;
 
@@ -49,17 +50,22 @@ export function trackStatusAnomaly(route: string, status: number): void {
 
   const key = `${route}:${status}`;
   const now = Date.now();
-  const recent = (statusEvents.get(key) ?? []).filter((t) => now - t <= ALERT_WINDOW_MS);
-  recent.push(now);
-  statusEvents.set(key, recent);
+  const pruned = (statusEvents.get(key) ?? []).filter(
+    (t) => now - t <= ALERT_WINDOW_MS,
+  );
+  if (pruned.length === 0) {
+    statusEvents.delete(key);
+  }
+  pruned.push(now);
+  statusEvents.set(key, pruned);
 
-  if (recent.length === ALERT_THRESHOLD) {
+  if (pruned.length === ALERT_THRESHOLD) {
     logServerEvent("warn", {
       route,
       action: "status-anomaly",
       status,
       errorCode: "HTTP_SPIKE",
-      details: { eventsInWindow: recent.length, windowMs: ALERT_WINDOW_MS },
+      details: { eventsInWindow: pruned.length, windowMs: ALERT_WINDOW_MS },
     });
   }
 }
