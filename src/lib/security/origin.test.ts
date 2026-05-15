@@ -44,6 +44,14 @@ describe("isTrustedMutationRequest", () => {
     expect(isTrustedMutationRequest(req)).toBe(true);
   });
 
+  it("allows bare hostname in ALLOWED_ORIGINS", () => {
+    process.env.ALLOWED_ORIGINS = "tertoct.vercel.app";
+    const req = makeReq("https://app.example.com/api/x", {
+      origin: "https://tertoct.vercel.app",
+    });
+    expect(isTrustedMutationRequest(req)).toBe(true);
+  });
+
   it("rejects unknown origin in production", () => {
     const req = makeReq("https://app.example.com/api/x", {
       origin: "https://evil.example.com",

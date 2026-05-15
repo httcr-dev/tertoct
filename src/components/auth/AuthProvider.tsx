@@ -28,11 +28,16 @@ import {
   initialCookieSyncState,
   shouldSyncCookie,
 } from "@/components/auth/cookieSyncState";
-import { isDevTunnelHostname } from "@/lib/security/origin";
-
 const AUTH_PENDING_KEY = "tertoct:auth-pending-until";
 const AUTH_PENDING_TTL_MS = 60_000;
-const AUTH_PENDING_GRACE_MS = 1_800;
+const AUTH_PENDING_GRACE_MS = 5_000;
+
+function pendingSignInFailureMessage(hostname: string): string {
+  return (
+    `Login não completou. Tente de novo em Safari ou Chrome (evite o navegador embutido de apps). ` +
+    `Se o problema continuar, confira em Firebase → Authentication → Domínios autorizados: ${hostname}`
+  );
+}
 
 /** Safari iOS may clear sessionStorage across the Google redirect; localStorage survives. */
 function readAuthPendingExpiry(): number {
@@ -80,33 +85,9 @@ function clearAuthPendingExpiry(): void {
 }
 
 function shouldUseRedirectSignIn() {
-  if (typeof window === "undefined") return false;
-
-  // ngrok/LAN: redirect often loses auth state (storage/partitioning); popup keeps same page.
-  if (isDevTunnelHostname(window.location.hostname)) {
-    return false;
-  }
-
-  const ua = window.navigator.userAgent.toLowerCase();
-  const platform = window.navigator.platform.toLowerCase();
-  const maxTouchPoints = window.navigator.maxTouchPoints ?? 0;
-  const isAndroid = ua.includes("android");
-  const isIos = /iphone|ipad|ipod/.test(ua);
-
-  const userAgentData = (
-    navigator as Navigator & { userAgentData?: { mobile?: boolean } }
-  ).userAgentData;
-  if (userAgentData?.mobile === true) {
-    return true;
-  }
-
-  // Real Android reports platform "Linux ..."; do not treat Linux as DevTools emulation.
-  const isChromeDevtoolsMobileEmulation =
-    maxTouchPoints > 0 &&
-    (isAndroid || isIos) &&
-    (platform.includes("win") || platform.includes("mac"));
-
-  return (isAndroid || isIos) && maxTouchPoints > 0 && !isChromeDevtoolsMobileEmulation;
+  // Popup first (works on prod desktop and most mobile Safari/Chrome). Redirect only as
+  // fallback in signInWithGoogle catch — redirect often loses session on iOS after OAuth.
+  return false;
 }
 
 interface AuthContextValue {
@@ -268,34 +249,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         clearAuthPendingExpiry();
       }
 
-      try {
-        const redirectResult = await consumeRedirectResult(auth);
-        const userAfterRedirect = redirectResult?.user ?? auth.currentUser;
-        if (process.env.NODE_ENV !== "production") {
-          console.info("[auth] after redirect", {
-            redirectUser: redirectResult?.user?.uid ?? null,
-            currentUser: auth.currentUser?.uid ?? null,
-            hostname: window.location.hostname,
-          });
-        }
-        if (userAfterRedirect) {
-          await syncUserSession(userAfterRedirect);
-        } else if (hasPendingSignIn) {
-          setAuthError(
-            `Login não completou. Adicione "${window.location.hostname}" em Firebase Console → Authentication → Domínios autorizados (e tente de novo).`,
-          );
-          setAuthPending(false);
-          setLoading(false);
-          clearAuthPendingExpiry();
-        }
-      } catch (error) {
-        console.error("Error handling redirect result", error);
-        setAuthError(getAuthErrorMessage(error));
-        setAuthPending(false);
-        setLoading(false);
-        clearAuthPendingExpiry();
-      }
-
       unsubscribe = onIdTokenChanged(auth, (user) => {
         if (recoveringSessionRef.current && user) {
           return;
@@ -319,10 +272,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const pendingUntil = readAuthPendingExpiry();
           if (pendingUntil > Date.now()) {
             setAuthPendingState(true);
+            if (pendingClearTimeoutRef.current) {
+              clearTimeout(pendingClearTimeoutRef.current);
+            }
             pendingClearTimeoutRef.current = setTimeout(() => {
               if (!getFirebaseAuth().currentUser) {
                 setAuthError(
-                  `Login não completou. Adicione "${window.location.hostname}" em Firebase Console → Authentication → Domínios autorizados.`,
+                  pendingSignInFailureMessage(window.location.hostname),
                 );
                 setAuthPending(false);
                 setLoading(false);
@@ -335,6 +291,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setLoading(false);
         }
       });
+
+      try {
+        const redirectResult = await consumeRedirectResult(auth);
+        const userAfterRedirect = redirectResult?.user ?? auth.currentUser;
+        if (process.env.NODE_ENV !== "production") {
+          console.info("[auth] after redirect", {
+            redirectUser: redirectResult?.user?.uid ?? null,
+            currentUser: auth.currentUser?.uid ?? null,
+            hostname: window.location.hostname,
+          });
+        }
+        if (userAfterRedirect) {
+          await syncUserSession(userAfterRedirect);
+        }
+        // Do not fail immediately when pending: onIdTokenChanged may still deliver the user.
+      } catch (error) {
+        console.error("Error handling redirect result", error);
+        setAuthError(getAuthErrorMessage(error));
+        setAuthPending(false);
+        setLoading(false);
+        clearAuthPendingExpiry();
+      }
     };
 
     void initAuth();

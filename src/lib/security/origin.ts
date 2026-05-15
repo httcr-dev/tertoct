@@ -11,6 +11,16 @@ function tryParseAllowedOrigin(value: string): string | null {
   }
 }
 
+/** ALLOWED_ORIGINS may be a full URL or a bare hostname (e.g. tertoct.vercel.app). */
+function parseAllowedOriginEntry(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.includes("://")) {
+    return tryParseAllowedOrigin(trimmed);
+  }
+  return tryParseAllowedOrigin(`https://${trimmed}`);
+}
+
 function shouldSkipWwwApexToggle(hostname: string): boolean {
   if (hostname === "localhost") return true;
   if (hostname.startsWith("[")) return true;
@@ -94,7 +104,7 @@ function collectAllowedOrigins(req: Request): Set<string> {
   const envOrigins = process.env.ALLOWED_ORIGINS;
   if (envOrigins) {
     for (const item of envOrigins.split(",")) {
-      const parsed = tryParseAllowedOrigin(item);
+      const parsed = parseAllowedOriginEntry(item);
       if (parsed) addOriginAndWwwPair(parsed, into);
     }
   }
