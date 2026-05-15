@@ -179,7 +179,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        await getRedirectResult(auth);
+        const result = await getRedirectResult(auth);
+        if (result?.user) {
+          console.log("Redirect result user:", result.user.email);
+        }
       } catch (error) {
         console.error("Error handling redirect result", error);
         setAuthError(getAuthErrorMessage(error));
