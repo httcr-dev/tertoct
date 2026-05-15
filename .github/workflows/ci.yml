@@ -58,9 +58,30 @@ jobs:
       - name: Run tests with emulator (mais estável)
         run: firebase emulators:exec --only firestore "npm run test"
 
-  build:
+  e2e:
     runs-on: ubuntu-latest
     needs: [lint, typecheck, test]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm i -g firebase-tools
+      - run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests with Firebase emulators
+        run: npm run test:e2e
+        env:
+          CI: true
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test, e2e]
 
     steps:
       - uses: actions/checkout@v4

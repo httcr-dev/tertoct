@@ -111,6 +111,8 @@ export function HomeClient({
               </p>
 
               <button
+                type="button"
+                data-testid="landing-login-google"
                 onClick={signInWithGoogle}
                 className="mt-8 flex cursor-pointer items-center gap-3 rounded-full bg-zinc-100 px-8 py-3.5 text-base font-semibold text-zinc-900 shadow-[0_0_20px_rgba(255,255,255,0.1)] transition-all hover:bg-white hover:scale-105 hover:shadow-[0_0_30px_rgba(255,255,255,0.2)] active:scale-95"
               >

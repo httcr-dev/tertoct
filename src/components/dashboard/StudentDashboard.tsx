@@ -248,7 +248,16 @@ export function StudentDashboard() {
       setCheckInStatus("error");
       setTimeout(() => setCheckInStatus("idle"), 2600);
     }
-  }, [profile, plan, canCheckIn, checkInStatus, selectedClassId, canCheckInForClass]);
+  }, [
+    profile,
+    plan,
+    canCheckIn,
+    checkInStatus,
+    selectedClassId,
+    canCheckInForClass,
+    isSelectedDateToday,
+    selectedDateKey,
+  ]);
 
   // ── Feedback handler ───────────────────────────────────────────────
   const handleSendFeedback = useCallback(async () => {
@@ -319,6 +328,8 @@ export function StudentDashboard() {
           ).map(({ tab, icon: Icon, label }) => (
             <button
               key={tab}
+              type="button"
+              data-testid={`student-tab-${tab}`}
               onClick={() => handleTabChange(tab)}
               className={`flex items-center gap-3 w-full text-left rounded-lg px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer ${
                 selectedTab === tab
@@ -383,6 +394,8 @@ export function StudentDashboard() {
             </div>
             <div className="flex items-center gap-4">
               <button
+                type="button"
+                data-testid="student-logout"
                 onClick={signOutUser}
                 className="flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
               >
@@ -579,6 +592,7 @@ export function StudentDashboard() {
                         </p>
                         <input
                           type="date"
+                          data-testid="student-checkin-date"
                           className="w-full cursor-pointer rounded-xl border border-zinc-800 bg-black/30 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-amber-500/40"
                           value={selectedDateKey}
                           min={todayKey}
@@ -639,6 +653,8 @@ export function StudentDashboard() {
                       </div>
 
                       <button
+                        type="button"
+                        data-testid="student-checkin-submit"
                         onClick={handleCheckIn}
                         disabled={!canCheckInForClass || checkInStatus === "loading"}
                         className={`w-full py-6 rounded-[30px] text-lg font-bold transition-all transform active:scale-95 shadow-2xl ${
@@ -783,6 +799,7 @@ export function StudentDashboard() {
                     </p>
                     <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
                       <input
+                        data-testid="student-feedback-input"
                         value={feedbackText}
                         onChange={(e) => setFeedbackText(e.target.value.slice(0, 64))}
                         maxLength={64}
@@ -791,6 +808,8 @@ export function StudentDashboard() {
                         className="w-full rounded-xl border border-zinc-800 bg-black/30 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-amber-500/40 disabled:opacity-50"
                       />
                       <button
+                        type="button"
+                        data-testid="student-feedback-submit"
                         onClick={handleSendFeedback}
                         disabled={feedbackStatus === "loading" || !feedbackText.trim()}
                         className="rounded-xl bg-amber-500 px-5 py-3 text-sm font-bold text-black hover:bg-amber-400 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"

@@ -7,6 +7,7 @@ import {
   type Auth,
 } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
+import { connectEmulatorsIfEnabled } from "./connectEmulators";
 
 let firebaseApp: FirebaseApp | undefined;
 let authInstance: Auth | undefined;
@@ -38,6 +39,7 @@ function getFirebaseApp(): FirebaseApp {
 export function getFirebaseAuth(): Auth {
   if (!authInstance) {
     authInstance = getAuth(getFirebaseApp());
+    connectEmulatorsIfEnabled();
     setPersistence(authInstance, browserLocalPersistence).catch(() => {
       // Keep auth functional even if persistence fails (e.g. private mode)
     });
@@ -49,6 +51,7 @@ export function getFirebaseAuth(): Auth {
 export function getFirestoreDb(): Firestore {
   if (!dbInstance) {
     dbInstance = getFirestore(getFirebaseApp());
+    connectEmulatorsIfEnabled();
   }
 
   return dbInstance;

@@ -571,6 +571,8 @@ export function CoachDashboard() {
           ).map(({ tab, icon: Icon, label }) => (
             <button
               key={tab}
+              type="button"
+              data-testid={`coach-tab-${tab}`}
               onClick={() => handleTabChange(tab)}
               className={`flex items-center gap-3 w-full text-left rounded-lg px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer ${selectedTab === tab ? "bg-zinc-800/60 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"}`}
             >
@@ -595,6 +597,8 @@ export function CoachDashboard() {
         ).map(({ tab, icon, label }) => (
           <button
             key={tab}
+            type="button"
+            data-testid={`coach-tab-${tab}`}
             onClick={() => handleTabChange(tab)}
             className={`flex min-w-0 cursor-pointer flex-col items-center gap-0.5 rounded-lg px-1 py-1 text-[9px] font-semibold transition-all active:scale-95 min-[380px]:text-[10px] ${selectedTab === tab ? "bg-amber-500/10 text-amber-400" : "text-zinc-500"}`}
           >

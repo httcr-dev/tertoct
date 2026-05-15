@@ -34,6 +34,16 @@ npm run dev
 
 Visit `http://localhost:3000`.
 
+### E2E tests (Playwright + Firebase emulators)
+
+Requires [Firebase CLI](https://firebase.google.com/docs/cli) (`npm i -g firebase-tools`).
+
+```bash
+npm run test:e2e
+```
+
+On first run (or after upgrading `@playwright/test`), browsers are installed automatically via `pretest:e2e`. To install manually: `npm run playwright:install`.
+
 ### Firestore data model
 
 - `users/{uid}`: `name`, `email`, `role` (`admin | coach | student`), `planId`, `active`, `createdAt`

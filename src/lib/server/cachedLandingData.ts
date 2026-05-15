@@ -35,8 +35,18 @@ async function loadPlansAndCoaches(): Promise<{
   return { plans, coaches };
 }
 
+async function getLandingPlansAndCoaches() {
+  // E2E/dev emulators: skip Next cache so seeded data is visible immediately.
+  if (process.env.FIRESTORE_EMULATOR_HOST) {
+    return loadPlansAndCoaches();
+  }
+  return getCachedLandingPlansAndCoaches();
+}
+
 export const getCachedLandingPlansAndCoaches = unstable_cache(
   loadPlansAndCoaches,
   ["landing-plans-coaches-v1"],
   { revalidate: 300 },
 );
+
+export { getLandingPlansAndCoaches };

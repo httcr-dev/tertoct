@@ -11,7 +11,11 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "jest",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "playwright:install": "playwright install chromium",
+    "pretest:e2e": "npm run playwright:install",
+    "test:e2e": "firebase emulators:exec --project tertoct-e2e --only firestore,auth \"playwright test\"",
+    "test:e2e:ui": "firebase emulators:exec --project tertoct-e2e --only firestore,auth \"playwright test --ui\""
   },
   "dependencies": {
     "firebase": "^12.9.0",
@@ -36,6 +40,7 @@
     "eslint-config-next": "16.1.6",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.5",
+    "@playwright/test": "^1.52.0",
     "jest": "^30.3.0",
     "prettier": "^3.8.1",
     "tailwindcss": "^4",

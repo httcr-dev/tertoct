@@ -4,6 +4,13 @@ import { getRequestIp } from "@/lib/proxy/requestIp";
 
 const WINDOW_MS = 60_000;
 
+function isE2eOrEmulator(): boolean {
+  return (
+    process.env.NEXT_PUBLIC_E2E === "true" ||
+    !!process.env.FIRESTORE_EMULATOR_HOST
+  );
+}
+
 function tooManyResponse() {
   return { allowed: false as const };
 }
@@ -20,7 +27,7 @@ export function checkProxyRateLimit(req: NextRequest): { allowed: true } | Retur
   if (pathname.startsWith("/api/auth")) {
     const { allowed } = checkRateLimitMemory(`mw:api-auth:${method}:${ip}`, {
       windowMs: WINDOW_MS,
-      maxRequests: 5,
+      maxRequests: isE2eOrEmulator() ? 10_000 : 5,
     });
     if (!allowed) return tooManyResponse();
     return { allowed: true };

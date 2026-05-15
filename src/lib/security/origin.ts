@@ -44,9 +44,7 @@ function addOriginAndWwwPair(origin: string, into: Set<string>): void {
   }
 }
 
-/** Dev tunnels (ngrok, LAN) where the browser Origin differs from localhost in req.url. */
-const DEV_TUNNEL_HOST_RE =
-  /\.(ngrok-free\.(dev|app)|ngrok\.(io|app))$/i;
+const DEV_TUNNEL_HOST_RE = /\.(ngrok-free\.(dev|app)|ngrok\.(io|app))$/i;
 
 export function isDevTunnelHostname(hostname: string): boolean {
   return (
@@ -115,6 +113,24 @@ function collectAllowedOrigins(req: Request): Set<string> {
 function isSameSiteBrowserMutation(req: Request): boolean {
   const mode = req.headers.get("sec-fetch-site")?.toLowerCase();
   return mode === "same-origin" || mode === "same-site";
+}
+
+export type MutationOriginDetails = {
+  origin: string | null;
+  referer: string | null;
+  host: string | null;
+  forwardedHost: string | null;
+  requestUrl: string;
+};
+
+export function getMutationOriginDetails(req: Request): MutationOriginDetails {
+  return {
+    origin: req.headers.get("origin"),
+    referer: req.headers.get("referer"),
+    host: req.headers.get("host"),
+    forwardedHost: req.headers.get("x-forwarded-host"),
+    requestUrl: req.url,
+  };
 }
 
 export function isTrustedMutationRequest(req: Request): boolean {

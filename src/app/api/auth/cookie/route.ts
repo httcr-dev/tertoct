@@ -5,7 +5,10 @@ import { getClientIdentifier } from "@/lib/auth/clientIdentifier";
 import { checkRateLimitMemory } from "@/lib/auth/rateLimitMemory";
 import { verifyToken } from "@/lib/auth/verifyToken";
 import { buildAuthRateLimitKey } from "@/lib/auth/rateLimitKey";
-import { isTrustedMutationRequest } from "@/lib/security/origin";
+import {
+  getMutationOriginDetails,
+  isTrustedMutationRequest,
+} from "@/lib/security/origin";
 import {
   captureServerError,
   logServerEvent,
@@ -15,44 +18,34 @@ import {
 // In-memory rate limits — no Firestore round-trips, sub-millisecond checks.
 // Real security gate for POST is token verification (server-side JWT check),
 // not the rate counter. The counter just prevents trivial DoS.
+const isE2eOrEmulator =
+  process.env.NEXT_PUBLIC_E2E === "true" ||
+  !!process.env.FIRESTORE_EMULATOR_HOST;
+
 const POST_LIMIT = {
   windowMs: 60_000,
-  maxRequests: 30,
+  maxRequests: isE2eOrEmulator ? 10_000 : 30,
 } as const;
 
 const DELETE_LIMIT = {
   windowMs: 60_000,
   // Clearing a session cookie is a low-risk operation — being too strict here
   // means a user can get stuck in a signed-in-but-blocked state.
-  maxRequests: 100,
+  maxRequests: isE2eOrEmulator ? 10_000 : 100,
 } as const;
 
-export async function POST(req: Request) {
-  if (process.env.NODE_ENV !== "production") {
-    logServerEvent("info", {
-      route: "/api/auth/cookie",
-      action: "post-received",
-      details: {
-        origin: req.headers.get("origin"),
-        host: req.headers.get("host"),
-        forwardedHost: req.headers.get("x-forwarded-host"),
-      },
-    });
-  }
+function logOriginMismatch(req: Request, action: string): void {
+  logServerEvent("warn", {
+    route: "/api/auth/cookie",
+    action,
+    errorCode: "ORIGIN_FORBIDDEN",
+    details: getMutationOriginDetails(req),
+  });
+}
 
+export async function POST(req: Request) {
   if (!isTrustedMutationRequest(req)) {
-    logServerEvent("warn", {
-      route: "/api/auth/cookie",
-      action: "forbidden-origin",
-      errorCode: "ORIGIN_FORBIDDEN",
-      details: {
-        origin: req.headers.get("origin"),
-        referer: req.headers.get("referer"),
-        host: req.headers.get("host"),
-        forwardedHost: req.headers.get("x-forwarded-host"),
-        requestUrl: req.url,
-      },
-    });
+    logOriginMismatch(req, "forbidden-origin");
     return NextResponse.json(
       { success: false, error: "Forbidden origin" },
       { status: 403 },
@@ -179,6 +172,7 @@ export async function POST(req: Request) {
 export async function DELETE(req: Request) {
   try {
     if (!isTrustedMutationRequest(req)) {
+      logOriginMismatch(req, "forbidden-origin-delete");
       return NextResponse.json(
         { success: false, error: "Forbidden origin" },
         { status: 403 },

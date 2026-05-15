@@ -20,18 +20,35 @@ function isLikelyHttps(req: NextRequest): boolean {
   );
 }
 
+function emulatorCspSources(): string {
+  const usingEmulators =
+    process.env.FIRESTORE_EMULATOR_HOST ||
+    process.env.FIREBASE_AUTH_EMULATOR_HOST ||
+    process.env.NEXT_PUBLIC_FIREBASE_EMULATORS === "true";
+  if (!usingEmulators) return "";
+  return [
+    "http://127.0.0.1:8080",
+    "http://localhost:8080",
+    "http://127.0.0.1:9099",
+    "http://localhost:9099",
+    "ws://127.0.0.1:8080",
+    "ws://localhost:8080",
+  ].join(" ");
+}
+
 function buildCsp(nonce: string): string {
   const isDev = process.env.NODE_ENV !== "production";
   const scriptSrc = isDev
     ? "'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://accounts.google.com https://va.vercel-scripts.com"
     : `'self' 'nonce-${nonce}' 'strict-dynamic' https://apis.google.com https://accounts.google.com https://va.vercel-scripts.com`;
+  const emulatorSrc = emulatorCspSources();
 
   return [
     "default-src 'self'",
     `script-src ${scriptSrc}`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: https: blob:",
-    "connect-src 'self' https: *.google-analytics.com https://*.googleapis.com https://*.gstatic.com https://*.firebaseio.com https://*.cloudfunctions.net wss://*.firebaseio.com",
+    `connect-src 'self' https: *.google-analytics.com https://*.googleapis.com https://*.gstatic.com https://*.firebaseio.com https://*.cloudfunctions.net wss://*.firebaseio.com${emulatorSrc ? ` ${emulatorSrc}` : ""}`,
     "frame-src https://accounts.google.com https://*.firebaseapp.com",
     "font-src 'self' data: https://fonts.gstatic.com",
     "base-uri 'self'",
