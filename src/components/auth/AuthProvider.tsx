@@ -41,12 +41,23 @@ function shouldUseRedirectSignIn() {
   const maxTouchPoints = window.navigator.maxTouchPoints ?? 0;
   const isAndroid = ua.includes("android");
   const isIos = /iphone|ipad|ipod/.test(ua);
-  const isDesktopDevtoolsEmulation =
-    platform.includes("win") ||
-    platform.includes("mac") ||
-    platform.includes("linux");
 
-  return (isAndroid || isIos) && maxTouchPoints > 0 && !isDesktopDevtoolsEmulation;
+  const userAgentData = (
+    navigator as Navigator & { userAgentData?: { mobile?: boolean } }
+  ).userAgentData;
+  if (userAgentData?.mobile === true) {
+    return true;
+  }
+
+  // Chrome DevTools device emulation usually keeps Windows/macOS platform while spoofing a
+  // mobile UA. Real Android phones almost always report platform as "Linux ..."; treating
+  // "linux" as dev emulation incorrectly forced signInWithPopup, which breaks on phones.
+  const isChromeDevtoolsMobileEmulation =
+    maxTouchPoints > 0 &&
+    (isAndroid || isIos) &&
+    (platform.includes("win") || platform.includes("mac"));
+
+  return (isAndroid || isIos) && maxTouchPoints > 0 && !isChromeDevtoolsMobileEmulation;
 }
 
 interface AuthContextValue {
