@@ -11,11 +11,12 @@ import {
   ReactNode,
 } from "react";
 import {
+  getRedirectResult,
   onIdTokenChanged,
   signInWithPopup,
   signInWithRedirect,
-  getRedirectResult,
   signOut,
+  type UserCredential,
   User as FirebaseUser,
 } from "firebase/auth";
 import {
@@ -135,6 +136,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // send DELETE when there is something to delete (avoids rate-limit spam
   // on every unauthenticated page load).
   const hasCookieRef = useRef(false);
+  /** Non-zero while cookie + Firestore bootstrap is running — ignore transient null tokens meanwhile. */
+  const userSessionSyncInFlightRef = useRef(0);
 
   const setAuthPending = useCallback((pending: boolean) => {
     setAuthPendingState(pending);
@@ -174,6 +177,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let unsubscribe: (() => void) | null = null;
 
     const initAuth = async () => {
+      const authWithReady = auth as unknown as {
+        authStateReady?: () => Promise<void>;
+      };
+      if (typeof authWithReady.authStateReady === "function") {
+        await authWithReady.authStateReady();
+      }
+
       const pendingUntil = readAuthPendingExpiry();
       const hasPendingSignIn = pendingUntil > Date.now();
       if (hasPendingSignIn) {
@@ -182,8 +192,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         clearAuthPendingExpiry();
       }
 
+      let redirectCred: UserCredential | null = null;
       try {
-        await getRedirectResult(auth);
+        redirectCred = await getRedirectResult(auth);
       } catch (error) {
         console.error("Error handling redirect result", error);
         setAuthError(getAuthErrorMessage(error));
@@ -191,90 +202,105 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       }
 
-      unsubscribe = onIdTokenChanged(auth, (user) => {
+      const runUserSessionSync = async (user: FirebaseUser): Promise<void> => {
+        if (recoveringSessionRef.current && user) {
+          return;
+        }
+        userSessionSyncInFlightRef.current += 1;
         const authEventId = ++authEventIdRef.current;
+        setAuthError(null);
+        setLoading(true);
+        try {
+          const tokenResult = await user.getIdTokenResult();
+          const token = tokenResult.token;
+          const tokenExpiry = tokenResult.expirationTime;
+          const nextSyncState = { token, expiration: tokenExpiry };
+          const mustSyncCookie = shouldSyncCookie(
+            cookieSyncStateRef.current,
+            nextSyncState,
+          );
+
+          if (mustSyncCookie) {
+            const cookieResponse = await fetch("/api/auth/cookie", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "same-origin",
+              body: JSON.stringify({ token }),
+            });
+            if (!cookieResponse.ok) {
+              let detail = `Sessão HTTP ${cookieResponse.status}`;
+              try {
+                const body = (await cookieResponse.json()) as {
+                  error?: string;
+                };
+                if (body?.error) detail = `${detail}: ${body.error}`;
+              } catch {
+                /* ignore non-JSON error bodies */
+              }
+              throw new Error(detail);
+            }
+            cookieSyncStateRef.current = nextSyncState;
+            hasCookieRef.current = true;
+          }
+
+          const ensured = await ensureUserDocument(user);
+          if (authEventId === authEventIdRef.current) {
+            if (pendingClearTimeoutRef.current) {
+              clearTimeout(pendingClearTimeoutRef.current);
+              pendingClearTimeoutRef.current = null;
+            }
+            setAuthPending(false);
+            setProfile(ensured);
+            // Expose the user and stop loading ONLY after the cookie is securely mapped.
+            // This prevents the page.tsx useEffect from redirecting to /dashboard prematurely
+            // before the middleware in Next.js can read the cookie.
+            setFirebaseUser(user);
+            setLoading(false);
+          }
+        } catch (error) {
+          console.error("Failed to ensure user document or set cookie", error);
+          if (authEventId === authEventIdRef.current) {
+            setAuthError(getAuthErrorMessage(error));
+            recoveringSessionRef.current = true;
+            cookieSyncStateRef.current = initialCookieSyncState;
+            setFirebaseUser(null);
+            setProfile(null);
+            setAuthPending(false);
+            setLoading(false);
+            if (hasCookieRef.current) {
+              hasCookieRef.current = false;
+              try {
+                await fetch("/api/auth/cookie", { method: "DELETE" });
+              } catch {
+                // best effort cookie cleanup
+              }
+            }
+            try {
+              await signOut(auth);
+            } finally {
+              recoveringSessionRef.current = false;
+            }
+          }
+        } finally {
+          userSessionSyncInFlightRef.current -= 1;
+        }
+      };
+
+      if (redirectCred?.user) {
+        await runUserSessionSync(redirectCred.user);
+      }
+
+      unsubscribe = onIdTokenChanged(auth, (user) => {
         if (recoveringSessionRef.current && user) {
           return;
         }
 
         if (user) {
-          setAuthError(null);
-          setLoading(true);
-          void (async () => {
-            try {
-              const tokenResult = await user.getIdTokenResult();
-              const token = tokenResult.token;
-              const tokenExpiry = tokenResult.expirationTime;
-              const nextSyncState = { token, expiration: tokenExpiry };
-              const mustSyncCookie = shouldSyncCookie(
-                cookieSyncStateRef.current,
-                nextSyncState,
-              );
-
-              if (mustSyncCookie) {
-                const cookieResponse = await fetch("/api/auth/cookie", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  credentials: "same-origin",
-                  body: JSON.stringify({ token }),
-                });
-                if (!cookieResponse.ok) {
-                  let detail = `Sessão HTTP ${cookieResponse.status}`;
-                  try {
-                    const body = (await cookieResponse.json()) as {
-                      error?: string;
-                    };
-                    if (body?.error) detail = `${detail}: ${body.error}`;
-                  } catch {
-                    /* ignore non-JSON error bodies */
-                  }
-                  throw new Error(detail);
-                }
-                cookieSyncStateRef.current = nextSyncState;
-                hasCookieRef.current = true;
-              }
-
-              const ensured = await ensureUserDocument(user);
-              if (authEventId === authEventIdRef.current) {
-                if (pendingClearTimeoutRef.current) {
-                  clearTimeout(pendingClearTimeoutRef.current);
-                  pendingClearTimeoutRef.current = null;
-                }
-                setAuthPending(false);
-                setProfile(ensured);
-                // Expose the user and stop loading ONLY after the cookie is securely mapped.
-                // This prevents the page.tsx useEffect from redirecting to /dashboard prematurely
-                // before the middleware in Next.js can read the cookie.
-                setFirebaseUser(user);
-                setLoading(false);
-              }
-            } catch (error) {
-              console.error("Failed to ensure user document or set cookie", error);
-              if (authEventId === authEventIdRef.current) {
-                setAuthError(getAuthErrorMessage(error));
-                recoveringSessionRef.current = true;
-                cookieSyncStateRef.current = initialCookieSyncState;
-                setFirebaseUser(null);
-                setProfile(null);
-                setAuthPending(false);
-                setLoading(false);
-                if (hasCookieRef.current) {
-                  hasCookieRef.current = false;
-                  try {
-                    await fetch("/api/auth/cookie", { method: "DELETE" });
-                  } catch {
-                    // best effort cookie cleanup
-                  }
-                }
-                try {
-                  await signOut(auth);
-                } finally {
-                  recoveringSessionRef.current = false;
-                }
-              }
-            }
-          })();
+          void runUserSessionSync(user);
         } else {
+          if (userSessionSyncInFlightRef.current > 0) {
+            return;
+          }
           cookieSyncStateRef.current = initialCookieSyncState;
           setProfile(null);
           setFirebaseUser(null);
@@ -357,6 +383,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [getAuthErrorMessage, setAuthPending]);
 
   const signOutUser = useCallback(async () => {
+    userSessionSyncInFlightRef.current = 0;
     const auth = getFirebaseAuth();
     await signOut(auth);
   }, []);
