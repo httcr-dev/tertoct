@@ -194,7 +194,9 @@ service cloud.firestore {
           )
         );
 
-      // Check-ins are append-only to manter histórico confiável.
+      // Cancelamento pelo aluno: apenas via API privada (Admin SDK), que valida
+      // propriedade do check-in, janela de 1h antes da turma e decrementa contadores.
+      // Exclusão direta no cliente permanece bloqueada.
       allow update, delete: if false;
     }
 

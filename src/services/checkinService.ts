@@ -12,6 +12,23 @@ import type { CheckIn } from "@/lib/types";
 import { checkinsCol } from "@/lib/firestore/refs";
 import { mapCheckin } from "@/lib/firestore/mappers";
 
+export async function cancelCheckIn(checkinId: string): Promise<void> {
+  const response = await fetch(
+    `/api/private/checkins/${encodeURIComponent(checkinId)}`,
+    { method: "DELETE" },
+  );
+  if (!response.ok) {
+    let message = "Falha ao cancelar check-in";
+    try {
+      const body = (await response.json()) as { error?: string };
+      if (body?.error) message = body.error;
+    } catch {
+      // ignore
+    }
+    throw new Error(message);
+  }
+}
+
 export async function createCheckIn(
   _userId: string,
   planId: string,

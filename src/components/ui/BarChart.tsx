@@ -61,7 +61,8 @@ export function BarChart({
   let todayLabelIndex: number;
 
   if (range === "week") {
-    slotCount = 7;
+    // Semana útil: segunda a sexta (weekStart já é segunda via startOfWeek).
+    slotCount = 5;
     const weekStart = startOfWeek(now);
     counts = Array.from({ length: slotCount }, () => 0);
     const slotKeys: string[] = [];

@@ -27,7 +27,7 @@ jest.mock("@/lib/firebase", () => ({
 
 // Don't mock toDate — let it use the real implementation for integration coverage
 
-import { createCheckIn, fetchCheckinsByUser } from "./checkinService";
+import { cancelCheckIn, createCheckIn, fetchCheckinsByUser } from "./checkinService";
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -42,6 +42,17 @@ beforeEach(() => {
       set: mockTxSet,
     }),
   );
+});
+
+describe("cancelCheckIn", () => {
+  it("cancels check-in through private API", async () => {
+    await cancelCheckIn("user-1_class-1_2026-05-19");
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/private/checkins/user-1_class-1_2026-05-19",
+      { method: "DELETE" },
+    );
+  });
 });
 
 describe("createCheckIn", () => {

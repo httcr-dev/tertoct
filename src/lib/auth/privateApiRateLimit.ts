@@ -14,10 +14,11 @@ export async function enforcePrivateApiRateLimit(
   const pathname = url.pathname;
   const method = req.method.toUpperCase();
 
-  const isCheckinPost =
-    pathname.includes("/api/private/checkins") && method === "POST";
+  const isCheckinMutation =
+    pathname.includes("/api/private/checkins") &&
+    (method === "POST" || method === "DELETE");
 
-  const maxRequests = isCheckinPost ? 10 : 100;
+  const maxRequests = isCheckinMutation ? 10 : 100;
   const key = `api-private:${method}:${pathname}:${uid}`;
 
   const limit = await checkRateLimit(key, {
