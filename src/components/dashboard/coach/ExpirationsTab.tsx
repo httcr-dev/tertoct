@@ -142,6 +142,13 @@ export function ExpirationsTab({
     return list;
   }, [processedStudents, selectedPlanId, expirationFilter]);
 
+  const scrollPhoneInputIntoView = (input: HTMLInputElement) => {
+    if (typeof window === "undefined" || window.innerWidth >= 768) return;
+    window.setTimeout(() => {
+      input.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 300);
+  };
+
   const sendWhatsApp = (student: ProcessedStudent) => {
     const rawPhone = student.phone || student.currentPhone;
     if (!rawPhone) return;
@@ -170,7 +177,7 @@ export function ExpirationsTab({
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
+    <div className="min-w-0 space-y-6 animate-in fade-in zoom-in-95 duration-300">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-xl font-bold text-zinc-100">
           Gerenciar Vencimentos
@@ -201,7 +208,7 @@ export function ExpirationsTab({
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {filteredStudents.length === 0 ? (
           <div className="col-span-full rounded-xl border border-dashed border-zinc-800/50 p-8 text-center text-zinc-500">
             Nenhum aluno encontrado para esse filtro.
@@ -219,7 +226,7 @@ export function ExpirationsTab({
             return (
               <div
                 key={student.id}
-                className={`relative flex flex-col justify-between gap-4 overflow-hidden rounded-xl border p-4 shadow-sm transition-colors ${
+                className={`relative flex min-w-0 flex-col gap-4 rounded-xl border p-4 shadow-sm transition-colors ${
                   isDueTomorrow 
                     ? "border-amber-500/50 bg-amber-500/5" 
                     : "border-zinc-800/40 bg-zinc-900/40"
@@ -241,19 +248,23 @@ export function ExpirationsTab({
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-2">
+                <div className="flex min-w-0 flex-col gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
                     <input
                       type="tel"
-                      placeholder="Telefone (ex: 11999999999)"
+                      inputMode="numeric"
+                      autoComplete="tel"
+                      placeholder="DDD + número"
                       value={student.currentPhone}
                       onChange={(e) => handlePhoneChange(student.id, e.target.value)}
-                      className="w-full flex-1 rounded-md border border-zinc-700 bg-black/50 px-3 py-1.5 text-sm text-zinc-200 focus:border-amber-500 outline-none placeholder:text-zinc-600"
+                      onFocus={(e) => scrollPhoneInputIntoView(e.currentTarget)}
+                      className="min-w-0 flex-1 rounded-md border border-zinc-700 bg-black/50 px-3 py-2 text-base text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-amber-500 scroll-mb-28 scroll-mt-4 sm:py-1.5 sm:text-sm"
                     />
                     <button
+                      type="button"
                       onClick={() => handleSavePhone(student.id)}
                       disabled={savingPhoneId === student.id || student.currentPhone === (student.phone || "")}
-                      className="flex h-8 w-8 items-center justify-center rounded-md bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white disabled:opacity-50 transition-colors"
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-zinc-800 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-white disabled:opacity-50 sm:h-8 sm:w-8"
                       title="Salvar Telefone"
                     >
                       <Save className="h-4 w-4" />
@@ -261,11 +272,12 @@ export function ExpirationsTab({
                   </div>
                   
                   <button
+                    type="button"
                     onClick={() => sendWhatsApp(student)}
                     disabled={!student.phone && !student.currentPhone}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#25D366]/10 text-[#25D366] py-2 text-sm font-medium hover:bg-[#25D366]/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#25D366]/10 py-2 text-sm font-medium text-[#25D366] transition-colors hover:bg-[#25D366]/20 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    <MessageCircle className="h-4 w-4" />
+                    <MessageCircle className="h-4 w-4 shrink-0" />
                     Cobrar no WhatsApp
                   </button>
                 </div>

@@ -179,15 +179,38 @@ export function ClassesTab({
                 Capacidade
               </label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 className="w-full rounded-lg border border-zinc-700 bg-black/50 px-4 py-2.5 text-sm text-zinc-200 transition-colors focus:border-amber-500/50 focus:outline-none"
-                value={editingFields.capacity ?? 0}
-                onChange={(e) =>
+                value={
+                  editingFields.capacity === undefined
+                    ? ""
+                    : String(editingFields.capacity)
+                }
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  if (raw === "") {
+                    setEditingFields((s) => {
+                      const next = { ...s };
+                      delete next.capacity;
+                      return next;
+                    });
+                    return;
+                  }
+                  const digits = raw.replace(/\D/g, "");
+                  if (digits === "") {
+                    setEditingFields((s) => {
+                      const next = { ...s };
+                      delete next.capacity;
+                      return next;
+                    });
+                    return;
+                  }
                   setEditingFields((s) => ({
                     ...s,
-                    capacity: Number(e.target.value),
-                  }))
-                }
+                    capacity: Number(digits),
+                  }));
+                }}
                 placeholder="20"
               />
             </div>

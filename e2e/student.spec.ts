@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { E2E_LABELS } from "./constants";
-import { dateKeyFromToday } from "./helpers/dates";
+import { nextWeekdayDateKeyFromToday } from "./helpers/dates";
 
 test.describe("aluno autenticado", () => {
   test("dashboard mostra plano ativo na visão geral", async ({ page }) => {
@@ -15,8 +15,8 @@ test.describe("aluno autenticado", () => {
     await expect(page.getByTestId("student-logout")).toBeVisible({ timeout: 30_000 });
     await expect(page.getByRole("heading", { name: "Pronto para o treino?" })).toBeVisible();
 
-    const tomorrow = dateKeyFromToday(1);
-    await page.getByTestId("student-checkin-date").fill(tomorrow);
+    const targetDate = nextWeekdayDateKeyFromToday(1);
+    await page.getByTestId(`student-checkin-date-${targetDate}`).click();
 
     const submit = page.getByTestId("student-checkin-submit");
     await expect(submit).toBeEnabled({ timeout: 15_000 });

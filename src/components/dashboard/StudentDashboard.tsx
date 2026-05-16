@@ -29,9 +29,17 @@ import {
   listenMyFeedbacks,
   type Feedback,
 } from "@/services/feedbackService";
+import { CheckinTab } from "./student/CheckinTab";
+import type { ActionStatus } from "./student/checkinTypes";
+import {
+  clampCheckinDateKey,
+  getAllowedCheckinDateKeys,
+  getDefaultCheckinDateKey,
+  getTodayDateKey,
+  isAllowedCheckinDateKey,
+} from "@/lib/utils/checkinDate";
 
 type StudentTab = "overview" | "checkin" | "plans" | "feedback";
-type ActionStatus = "idle" | "loading" | "success" | "error";
 
 export function StudentDashboard() {
   const { profile, signOutUser } = useAuth();
@@ -46,13 +54,9 @@ export function StudentDashboard() {
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
   const [classes, setClasses] = useState<GymClass[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string>("");
-  const [selectedDateKey, setSelectedDateKey] = useState<string>(() => {
-    const today = new Date();
-    const y = today.getFullYear();
-    const m = String(today.getMonth() + 1).padStart(2, "0");
-    const day = String(today.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  });
+  const [selectedDateKey, setSelectedDateKey] = useState<string>(() =>
+    getDefaultCheckinDateKey(),
+  );
   const [classCounts, setClassCounts] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
   const [checkInStatus, setCheckInStatus] = useState<ActionStatus>("idle");
@@ -78,7 +82,10 @@ export function StudentDashboard() {
     let unsubCounters: (() => void) | undefined;
 
     const load = async () => {
-      if (!profile) return;
+      if (!profile) {
+        setLoading(false);
+        return;
+      }
 
       const tasks: Promise<void>[] = [];
 
@@ -122,6 +129,8 @@ export function StudentDashboard() {
 
       try {
         await Promise.all(tasks);
+      } catch (error) {
+        console.error("[StudentDashboard] Failed to load initial data", error);
       } finally {
         setLoading(false);
       }
@@ -182,9 +191,23 @@ export function StudentDashboard() {
     [classes, selectedClassId],
   );
 
-  const todayKey = useMemo(() => getDateKeyForOffset(new Date(), -180), []);
+  const todayKey = useMemo(() => getTodayDateKey(), []);
 
-  const isSelectedDateToday = useMemo(() => selectedDateKey === todayKey, [selectedDateKey, todayKey]);
+  const allowedCheckinDateKeys = useMemo(() => getAllowedCheckinDateKeys(), []);
+
+  const isSelectedDateAllowed = useMemo(
+    () => isAllowedCheckinDateKey(selectedDateKey, todayKey),
+    [selectedDateKey, todayKey],
+  );
+
+  const isSelectedDateToday = useMemo(
+    () => selectedDateKey === todayKey,
+    [selectedDateKey, todayKey],
+  );
+
+  const handleSelectedDateKeyChange = useCallback((dateKey: string) => {
+    setSelectedDateKey(clampCheckinDateKey(dateKey));
+  }, []);
 
   const selectedClassRemaining = useMemo(() => {
     if (!selectedClass) return null;
@@ -211,6 +234,7 @@ export function StudentDashboard() {
 
   const canCheckInForClass = !!(
     canCheckIn &&
+    isSelectedDateAllowed &&
     selectedClass &&
     selectedClassRemaining != null &&
     selectedClassRemaining > 0 &&
@@ -223,7 +247,7 @@ export function StudentDashboard() {
     if (!profile || !plan || !canCheckIn || checkInStatus === "loading") return;
     const classId = selectedClassId;
     if (!classId) return;
-    if (!canCheckInForClass) return;
+    if (!canCheckInForClass || !isSelectedDateAllowed) return;
 
     setCheckInStatus("loading");
     try {
@@ -256,6 +280,7 @@ export function StudentDashboard() {
     selectedClassId,
     canCheckInForClass,
     isSelectedDateToday,
+    isSelectedDateAllowed,
     selectedDateKey,
   ]);
 
@@ -567,175 +592,26 @@ export function StudentDashboard() {
           )}
 
           {selectedTab === "checkin" && (
-            <div className="flex flex-col items-center justify-center py-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="w-full max-w-lg space-y-8 text-center">
-                <div className="space-y-2">
-                  <h2 className="text-3xl font-bold text-zinc-100">
-                    Pronto para o treino?
-                  </h2>
-                  <p className="text-zinc-400">
-                    {isSelectedDateToday 
-                      ? "Confirme sua presença na aula de hoje abaixo."
-                      : `Faça seu check-in para ${new Date(selectedDateKey + 'T00:00:00').toLocaleDateString('pt-BR')}.`
-                    }
-                  </p>
-                </div>
-
-                <div className="p-8 rounded-[40px] bg-zinc-900/40 border border-zinc-800 backdrop-blur-xl relative overflow-hidden group">
-                  <div className="absolute inset-0 bg-gradient-to-b from-amber-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-
-                  {currentWeekInfo && (
-                    <div className="relative z-10 space-y-6">
-                      <div className="space-y-2">
-                        <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">
-                          Data do Check-in
-                        </p>
-                        <input
-                          type="date"
-                          data-testid="student-checkin-date"
-                          className="w-full cursor-pointer rounded-xl border border-zinc-800 bg-black/30 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-amber-500/40"
-                          value={selectedDateKey}
-                          min={todayKey}
-                          onChange={(e) => setSelectedDateKey(e.target.value)}
-                        />
-                        {!isSelectedDateToday && (
-                          <p className="text-xs text-amber-400">
-                            Check-in para {new Date(selectedDateKey + 'T00:00:00').toLocaleDateString('pt-BR')}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">
-                          Escolha a turma
-                        </p>
-                        <select
-                          className="w-full cursor-pointer rounded-xl border border-zinc-800 bg-black/30 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-amber-500/40 disabled:opacity-50"
-                          value={selectedClassId}
-                          onChange={(e) => setSelectedClassId(e.target.value)}
-                          disabled={classes.length === 0}
-                        >
-                          {classes.length === 0 ? (
-                            <option value="">Nenhuma turma disponível</option>
-                          ) : (
-                            classes.map((c) => {
-                              const remaining = Math.max(
-                                c.capacity - (classCounts.get(c.id) ?? 0),
-                                0,
-                              );
-                              return (
-                                <option key={c.id} value={c.id}>
-                                  {c.name} • {c.startTime} (check-in até {c.checkinDeadlineTime}) • {remaining}/{c.capacity} vagas
-                                </option>
-                              );
-                            })
-                          )}
-                        </select>
-                      </div>
-
-                      <div className="flex justify-center gap-4">
-                        <div className="px-4 py-2 rounded-2xl bg-zinc-800/50 border border-zinc-700/50">
-                          <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">
-                            Disponíveis
-                          </p>
-                          <p className="text-2xl font-bold text-emerald-400">
-                            {currentWeekInfo.remaining}
-                          </p>
-                        </div>
-                        <div className="px-4 py-2 rounded-2xl bg-zinc-800/50 border border-zinc-700/50">
-                          <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">
-                            Total Semanal
-                          </p>
-                          <p className="text-2xl font-bold text-zinc-300">
-                            {currentWeekInfo.allowed}
-                          </p>
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        data-testid="student-checkin-submit"
-                        onClick={handleCheckIn}
-                        disabled={!canCheckInForClass || checkInStatus === "loading"}
-                        className={`w-full py-6 rounded-[30px] text-lg font-bold transition-all transform active:scale-95 shadow-2xl ${
-                          canCheckInForClass && checkInStatus !== "loading"
-                            ? "bg-amber-500 text-black hover:bg-amber-400 shadow-amber-500/20 cursor-pointer"
-                            : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
-                        }`}
-                      >
-                        {checkInStatus === "loading" ? (
-                          <span className="flex items-center justify-center gap-2">
-                            <span className="h-4 w-4 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" />
-                            Processando...
-                          </span>
-                        ) : !plan ? (
-                          "Aguardando Plano"
-                        ) : !selectedClassId ? (
-                          "Selecione uma turma"
-                        ) : alreadyCheckedInThisClassOnDate ? (
-                          "Check-in já realizado"
-                        ) : !plan.active ? (
-                          "Plano Inativo"
-                        ) : paymentOverdue ? (
-                          "Mensalidade Pendente"
-                        ) : !selectedClassWindowOpen ? (
-                          isSelectedDateToday ? "Check-in encerrado" : "Horário de check-in passou"
-                        ) : selectedClassRemaining != null && selectedClassRemaining <= 0 ? (
-                          "Turma lotada"
-                        ) : canCheckInForClass ? (
-                          "REALIZAR CHECK-IN"
-                        ) : (
-                          "Limite atingido"
-                        )}
-                      </button>
-
-                      {!isSelectedDateToday && canCheckInForClass && (
-                        <p className="text-xs text-zinc-500 bg-zinc-800/20 px-3 py-2 rounded-lg">
-                          ✓ Check-in antecipado: não há validação de horário para datas futuras
-                        </p>
-                      )}
-
-                      <div className="flex justify-center">
-                        <StatusBadge
-                          status={checkInStatus}
-                          successMessage="Check-in realizado!"
-                          errorMessage="Falha no check-in, tente novamente."
-                        />
-                      </div>
-
-                      {!canCheckIn && checkInStatus === "idle" && (
-                        <p className="text-red-400/80 text-xs font-medium bg-red-500/5 py-2 rounded-full border border-red-500/10">
-                          {paymentOverdue
-                            ? "Mensalidade pendente. Procure seu professor para regularizar."
-                            : !plan
-                              ? "Seu perfil não possui um plano associado."
-                              : !selectedClassId
-                                ? "Selecione uma turma para fazer check-in."
-                              : !plan.active
-                                ? "Este plano está desativado pela administração."
-                                : currentWeekInfo &&
-                                    currentWeekInfo.remaining <= 0
-                                  ? "Você atingiu o limite de check-ins para esta semana."
-                                  : "Não é possível fazer check-in no momento."}
-                        </p>
-                      )}
-
-                      {canCheckIn && checkInStatus === "idle" && !canCheckInForClass && (
-                        <p className="text-red-400/80 text-xs font-medium bg-red-500/5 py-2 rounded-full border border-red-500/10">
-                          {alreadyCheckedInThisClassOnDate
-                            ? `Você já fez check-in nessa turma para ${new Date(selectedDateKey + 'T00:00:00').toLocaleDateString('pt-BR')}.`
-                            : !selectedClassWindowOpen
-                              ? "Passou do horário máximo de check-in."
-                              : selectedClassRemaining != null && selectedClassRemaining <= 0
-                                ? "Turma lotada (sem vagas)."
-                                : "Não é possível fazer check-in agora."}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
+            <CheckinTab
+              currentWeekInfo={currentWeekInfo}
+              plan={plan}
+              paymentOverdue={paymentOverdue}
+              classes={classes}
+              selectedClassId={selectedClassId}
+              onSelectedClassIdChange={setSelectedClassId}
+              allowedDateKeys={allowedCheckinDateKeys}
+              selectedDateKey={selectedDateKey}
+              onSelectedDateKeyChange={handleSelectedDateKeyChange}
+              classCounts={classCounts}
+              isSelectedDateToday={isSelectedDateToday}
+              canCheckIn={canCheckIn}
+              canCheckInForClass={canCheckInForClass}
+              checkInStatus={checkInStatus}
+              alreadyCheckedInThisClassOnDate={alreadyCheckedInThisClassOnDate}
+              selectedClassWindowOpen={selectedClassWindowOpen}
+              selectedClassRemaining={selectedClassRemaining}
+              onCheckIn={handleCheckIn}
+            />
           )}
 
           {selectedTab === "plans" && (

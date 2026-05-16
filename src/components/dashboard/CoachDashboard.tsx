@@ -609,8 +609,8 @@ export function CoachDashboard() {
       </nav>
 
       {/* Main content */}
-      <main className="min-w-0 flex-1 overflow-x-hidden px-3 py-4 pb-24 sm:px-4 md:px-8 md:py-6 md:pb-6">
-        <div className="mx-auto flex min-h-screen w-full min-w-0 max-w-6xl flex-col gap-5 pb-8 md:gap-8">
+      <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-4 pb-24 sm:px-4 md:px-8 md:py-6 md:pb-6">
+        <div className="mx-auto flex w-full min-w-0 max-w-6xl flex-col gap-5 pb-8 md:min-h-screen md:gap-8">
           <header className="sticky top-0 z-30 -mx-3 flex items-center justify-between gap-3 border-b border-zinc-800/50 bg-black/85 px-3 pb-4 pt-2 backdrop-blur-xl md:static md:mx-0 md:bg-transparent md:px-0 md:pb-6 md:pt-2 md:backdrop-blur-0">
             <div>
               <h1 className="text-lg font-bold tracking-tight text-zinc-100 md:text-xl">
