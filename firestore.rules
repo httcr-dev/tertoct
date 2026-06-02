@@ -1,12 +1,10 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // ── Auth / roles ──────────────────────────────────────────────────────
+
     function isSignedIn() {
       return request.auth != null;
-    }
-
-    function userDoc(uid) {
-      return get(/databases/$(database)/documents/users/$(uid));
     }
 
     function currentRole() {
@@ -24,8 +22,37 @@ service cloud.firestore {
       return role == 'coach' || role == 'admin';
     }
 
+    function isStudent() {
+      return currentRole() == 'student';
+    }
+
+    function currentUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function currentUserPlanId() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.planId
+        : null;
+    }
+
+    function isCurrentUserActive() {
+      let path = /databases/$(database)/documents/users/$(request.auth.uid);
+      return exists(path) && (
+        !('active' in get(path).data) ||
+        get(path).data.active == true
+      );
+    }
+
+    function planIsActive(planId) {
+      return planId is string &&
+        exists(/databases/$(database)/documents/plans/$(planId)) &&
+        get(/databases/$(database)/documents/plans/$(planId)).data.active == true;
+    }
+
+    // ── Users ─────────────────────────────────────────────────────────────
+
     function canCoachUpdateUser(oldData, newData) {
-      // Coaches/admins can update operational fields, but must never elevate roles.
       return newData.diff(oldData).affectedKeys().hasOnly([
         'planId',
         'active',
@@ -58,58 +85,6 @@ service cloud.firestore {
         data.keys().hasOnly(['name', 'photoURL', 'role', 'bio', 'active']);
     }
 
-    function isStudent() {
-      let role = currentRole();
-      return role == 'student';
-    }
-
-    function canReadCheckin(checkinData) {
-      return isSignedIn() && (
-        checkinData.userId == request.auth.uid ||
-        isCoach() ||
-        isAdmin()
-      );
-    }
-
-    function currentUserPlanId() {
-      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.planId
-        : null;
-    }
-
-    function isCurrentUserActive() {
-      let path = /databases/$(database)/documents/users/$(request.auth.uid);
-      return exists(path) && (
-        !('active' in get(path).data) ||
-        get(path).data.active == true
-      );
-    }
-
-    function currentUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
-
-    function isPaymentCurrentForCheckin() {
-      let data = currentUserData();
-      return !('paymentDueDay' in data) ||
-        data.paymentDueDay == null ||
-        (
-          'monthlyPaymentPaid' in data &&
-          data.monthlyPaymentPaid == true
-        ) ||
-        (
-          'paymentValidUntil' in data &&
-          data.paymentValidUntil != null &&
-          request.time <= data.paymentValidUntil
-        );
-    }
-
-    function planIsActive(planId) {
-      return planId is string &&
-        exists(/databases/$(database)/documents/plans/$(planId)) &&
-        get(/databases/$(database)/documents/plans/$(planId)).data.active == true;
-    }
-
     match /users/{userId} {
       allow read: if isSignedIn() && (
         userId == request.auth.uid ||
@@ -137,104 +112,66 @@ service cloud.firestore {
         (userId == request.auth.uid && isCoach()) ||
         isAdmin()
       ) && isPublicCoachProfile(request.resource.data) &&
-      (!('active' in request.resource.data.diff(resource.data).affectedKeys()));
+        !('active' in request.resource.data.diff(resource.data).affectedKeys());
       allow delete: if false;
     }
 
+    // ── Plans (leitura pública; escrita só via API privada / Admin SDK) ───
+
     match /plans/{planId} {
-      // Plans are public-facing; allow read for everyone so landing page works
-      // without requiring authentication.
       allow read: if true;
-      allow create, update, delete: if isCoach();
+      allow create, update, delete: if false;
     }
+
+    // ── Turmas (classes) ──────────────────────────────────────────────────
+    // Alunos leem turmas ativas no client (listenActiveClasses).
+    // CRUD de turmas: /api/private/classes (Admin SDK).
 
     match /classes/{classId} {
-      // Students need to read classes to select a turma for check-in.
-      allow read: if isSignedIn();
-      allow create, update, delete: if isCoach();
-    }
-
-    match /checkins/{checkinId} {
-      allow read: if canReadCheckin(resource.data);
-
-      // Students can only create check-ins for themselves,
-      // for their current active plan, and with payment up to date.
-      allow create: if isStudent() &&
-        isCurrentUserActive() &&
-        request.resource.data.userId == request.auth.uid &&
-        request.resource.data.planId is string &&
-        request.resource.data.weekKey is string &&
-        currentUserData().planId == request.resource.data.planId &&
-        get(/databases/$(database)/documents/plans/$(request.resource.data.planId)).data.active
-          == true &&
-        existsAfter(
-          /databases/$(database)/documents/checkinCounters/$(request.auth.uid + '_' + request.resource.data.weekKey)
-        ) &&
-        getAfter(
-          /databases/$(database)/documents/checkinCounters/$(request.auth.uid + '_' + request.resource.data.weekKey)
-        ).data.userId == request.auth.uid &&
-        getAfter(
-          /databases/$(database)/documents/checkinCounters/$(request.auth.uid + '_' + request.resource.data.weekKey)
-        ).data.weekKey == request.resource.data.weekKey &&
-        getAfter(
-          /databases/$(database)/documents/checkinCounters/$(request.auth.uid + '_' + request.resource.data.weekKey)
-        ).data.count <= get(/databases/$(database)/documents/plans/$(request.resource.data.planId)).data.classesPerWeek &&
-        (
-          (
-            !exists(/databases/$(database)/documents/checkinCounters/$(request.auth.uid + '_' + request.resource.data.weekKey)) &&
-            getAfter(
-              /databases/$(database)/documents/checkinCounters/$(request.auth.uid + '_' + request.resource.data.weekKey)
-            ).data.count == 1
-          ) ||
-          (
-            exists(/databases/$(database)/documents/checkinCounters/$(request.auth.uid + '_' + request.resource.data.weekKey)) &&
-            getAfter(
-              /databases/$(database)/documents/checkinCounters/$(request.auth.uid + '_' + request.resource.data.weekKey)
-            ).data.count ==
-            get(/databases/$(database)/documents/checkinCounters/$(request.auth.uid + '_' + request.resource.data.weekKey)).data.count + 1
-          )
-        ) &&
-        // Payment check: allow if no due day, marked paid, within validUntil, or still on/before due day
-        isPaymentCurrentForCheckin();
-
-      // Cancelamento pelo aluno: apenas via API privada (Admin SDK), que valida
-      // propriedade do check-in, janela de 1h antes da turma e decrementa contadores.
-      // Exclusão direta no cliente permanece bloqueada.
-      allow update, delete: if false;
-    }
-
-    match /classCheckinCounters/{counterId} {
-      // Counter docs are operational; only coaches/admins can inspect them.
-      // Students create check-ins via server route (admin SDK), so they don't need direct access.
       allow read: if isSignedIn();
       allow create, update, delete: if false;
     }
 
+    // ── Check-ins ─────────────────────────────────────────────────────────
+    // Modelo:
+    //   doc id: {userId}_{classId}_{classDateKey}
+    //   campos: userId, planId, classId, classDateKey, weekKey, className, ...
+    // Criação/cancelamento: POST/DELETE /api/private/checkins (Admin SDK).
+    // Validações de negócio (plano, pagamento, capacidade, prazo, limite
+    // semanal) ficam na API; regras bloqueiam escrita direta no cliente.
+
+    function canReadCheckin(checkinData) {
+      return isSignedIn() && (
+        checkinData.userId == request.auth.uid ||
+        isCoach()
+      );
+    }
+
+    match /checkins/{checkinId} {
+      allow read: if canReadCheckin(resource.data);
+      allow create, update, delete: if false;
+    }
+
+    // Contador semanal por aluno: {userId}_{weekKey} (weekKey = ISO da segunda).
+    // Atualizado apenas na transação da API de check-in.
+
     match /checkinCounters/{counterId} {
       allow read: if isSignedIn() && (
         resource.data.userId == request.auth.uid ||
-        isCoach() ||
-        isAdmin()
+        isCoach()
       );
-
-      allow create, update: if isStudent() &&
-        request.resource.data.userId == request.auth.uid &&
-        request.resource.data.weekKey is string &&
-        counterId == request.auth.uid + '_' + request.resource.data.weekKey &&
-        (
-          (
-            !exists(/databases/$(database)/documents/checkinCounters/$(counterId)) &&
-            request.resource.data.count == 1
-          ) ||
-          (
-            exists(/databases/$(database)/documents/checkinCounters/$(counterId)) &&
-            request.resource.data.count ==
-              get(/databases/$(database)/documents/checkinCounters/$(counterId)).data.count + 1
-          )
-        );
-
-      allow delete: if false;
+      allow create, update, delete: if false;
     }
+
+    // Contador de vagas por turma/dia: {classId}_{classDateKey}.
+    // Alunos leem para exibir vagas restantes no fluxo de check-in.
+
+    match /classCheckinCounters/{counterId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if false;
+    }
+
+    // ── Feedbacks ─────────────────────────────────────────────────────────
 
     match /feedbacks/{feedbackId} {
       allow read: if isSignedIn() && (
@@ -256,7 +193,8 @@ service cloud.firestore {
       allow update: if false;
     }
 
-    // Future collections (enrollments, payments) can be refined later.
+    // ── Coleções futuras ──────────────────────────────────────────────────
+
     match /enrollments/{id} {
       allow read: if isCoach();
       allow create, update, delete: if isCoach();
@@ -268,4 +206,3 @@ service cloud.firestore {
     }
   }
 }
-

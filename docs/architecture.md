@@ -277,26 +277,55 @@ Main collections:
 
 ```txt
 users
+publicProfiles
 plans
 classes
 checkins
+checkinCounters
+classCheckinCounters
 feedbacks
 _rateLimits
 ```
 
 ---
 
+## Check-in and classes (domain model)
+
+Check-ins tie a **student**, **plan**, and **gym class (turma)** to a calendar day.
+
+| Collection | Document id | Purpose |
+| ---------- | ----------- | ------- |
+| `checkins` | `{userId}_{classId}_{classDateKey}` | One check-in per student per turma per day |
+| `checkinCounters` | `{userId}_{weekKey}` | Weekly quota (`classesPerWeek` on the plan); `weekKey` = ISO date of Monday |
+| `classCheckinCounters` | `{classId}_{classDateKey}` | Daily capacity per turma |
+
+**Mutations** (create / cancel check-in, counter updates, class CRUD, plan CRUD) run only through **private API routes** using the Firebase Admin SDK. Firestore Rules **block direct client writes** on those collections; rules enforce read access and isolation instead.
+
+**Reads from the client:**
+
+* Students: own `checkins`, active `classes`, `classCheckinCounters` (remaining seats).
+* Coaches: student `checkins`, `classes`, counters, `users` (students).
+
+Business rules enforced in `POST /api/private/checkins` (and `DELETE …/[checkinId]`):
+
+* Active student and plan; payment not overdue (`isPaymentOverdue`).
+* Turma active; deadline before start; check-in before deadline (today only).
+* No past dates; no duplicate `(user, class, date)`; weekly limit; turma capacity.
+
+---
+
 ## Security Rules
 
-Firestore Rules are used as the final authorization layer.
+Firestore Rules are the **final authorization layer for client SDK access**.
 
 Rules validate:
 
 * authentication;
 * ownership;
 * roles;
-* resource relationships;
-* access isolation.
+* read isolation on `checkins` and counters.
+
+Write-heavy domain logic (check-in, turmas, plans) is **not** duplicated in rules; it lives in private APIs so validation stays in one place (Zod + transactions).
 
 ---
 
