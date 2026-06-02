@@ -2,13 +2,7 @@
 
 import Image from "next/image";
 import { LandingSectionHeading } from "./LandingSectionHeading";
-
-interface CoachCardData {
-  id: string;
-  name: string | null;
-  bio?: string | null;
-  photoURL?: string | null;
-}
+import type { CoachCardData } from "@/services/landingService";
 
 interface CoachesSectionProps {
   coaches: CoachCardData[];

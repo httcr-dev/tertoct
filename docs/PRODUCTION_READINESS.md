@@ -11,9 +11,9 @@ Tertoct e uma aplicacao SaaS para academias de boxe baseada em Next.js + Firebas
 
 ### Componentes principais
 
-- `src/app`: rotas e APIs (`/api/auth/cookie`, `/api/auth/verify`).
+- `src/app`: rotas e APIs (`/api/auth/*`, `/api/private/*`, `/api/public/feedbacks`).
 - `src/proxy.ts`: middleware de seguranca (headers, controle de acesso por rota).
-- `src/lib/auth`: verificacao de token, RBAC e rate limit.
+- `src/lib/auth`: verificacao de token, privateRoute e rate limit.
 - `src/services`: camada de acesso e regras de negocio para Firestore.
 - `firestore.rules`: regras de seguranca no banco.
 
@@ -72,6 +72,8 @@ Tertoct e uma aplicacao SaaS para academias de boxe baseada em Next.js + Firebas
    - `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
    - `NEXT_PUBLIC_FIREBASE_APP_ID`
    - `FIREBASE_PROJECT_ID` (server/admin)
+   - `FIREBASE_CLIENT_EMAIL` (server/admin)
+   - `FIREBASE_PRIVATE_KEY` (server/admin)
    - `TRUST_PROXY_HEADERS=true` somente se existir proxy confiavel.
 
 ## 4.2 Checklist pre-deploy

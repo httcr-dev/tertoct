@@ -47,7 +47,7 @@ export default defineConfig({
     },
     {
       name: "student",
-      testMatch: /student\.spec\.ts/,
+      testMatch: /student.*\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         storageState: path.join(authDir, "student.json"),
@@ -56,7 +56,7 @@ export default defineConfig({
     },
     {
       name: "coach",
-      testMatch: /coach\.spec\.ts/,
+      testMatch: /coach.*\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         storageState: path.join(authDir, "coach.json"),

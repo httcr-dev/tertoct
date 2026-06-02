@@ -28,19 +28,6 @@ export interface Plan {
   active: boolean;
 }
 
-export interface UserDocument {
-  name: string | null;
-  email: string | null;
-  role: AppUserRole;
-  planId?: string | null;
-  active: boolean;
-  createdAt: Timestamp;
-  paymentDueDay?: number | null;
-  monthlyPaymentPaid?: boolean;
-  phone?: string | null;
-  paymentValidUntil?: DateLikeTimestamp | null;
-}
-
 export interface CheckIn {
   id: string;
   userId: string;

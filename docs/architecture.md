@@ -147,7 +147,7 @@ src/
 │   └── ui/
 │
 ├── lib/
-│   ├── auth/              # verifyToken, privateRoute, rbac, rate limits, admin
+│   ├── auth/              # verifyToken, privateRoute, rate limits, admin
 │   ├── firebase/          # client SDK, emulators, redirect
 │   ├── firestore/         # refs, mappers
 │   ├── security/          # origin allowlist (mutations)
@@ -417,19 +417,25 @@ Admin SDK transaction / update
 POST   /api/private/checkins
 DELETE /api/private/checkins/[checkinId]
 
-GET/POST        /api/private/classes
+POST            /api/private/classes
 PATCH/DELETE    /api/private/classes/[classId]
 
-GET/POST        /api/private/plans
+POST            /api/private/plans
 PATCH/DELETE    /api/private/plans/[planId]
 POST            /api/private/plans/[planId]/toggle
 
 PATCH           /api/private/users/[userId]   # assign-plan, payment, phone, toggle-active, …
 
-GET/POST        /api/private/feedback
+POST            /api/private/feedback
 DELETE          /api/private/feedback/[feedbackId]
 
-POST            /api/private/clearRateLimits   # admin
+DELETE          /api/private/clearRateLimits   # bearer secret (dev/ops)
+```
+
+## Public routes
+
+```txt
+GET    /api/public/feedbacks   # landing feedback wall (Admin SDK read)
 ```
 
 ---

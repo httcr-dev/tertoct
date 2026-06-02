@@ -24,7 +24,12 @@ export async function seedEmulatorAndCreateTokens(): Promise<E2eAuthTokens> {
   const db = admin.firestore();
   const auth = admin.auth();
 
-  await clearCollections(db, ["checkins", "checkinCounters", "classCounters", "feedback"]);
+  await clearCollections(db, [
+    "checkins",
+    "checkinCounters",
+    "classCheckinCounters",
+    "feedback",
+  ]);
 
   const { studentUid, coachUid, planId, classId } = E2E_IDS;
 
