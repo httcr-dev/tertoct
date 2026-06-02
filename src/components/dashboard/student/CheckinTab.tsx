@@ -97,6 +97,18 @@ export function CheckinTab({
         <div className="dashboard-card dashboard-card-accent relative min-w-0 overflow-hidden p-5 sm:rounded-[40px] sm:p-8 group">
           <div className="absolute inset-0 bg-gradient-to-b from-amber-500/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
 
+          {!currentWeekInfo && !plan ? (
+            <div
+              className="relative z-10 px-4 py-8 text-center sm:px-8 sm:py-12"
+              data-testid="student-checkin-no-plan"
+            >
+              <p className="text-sm text-zinc-400">
+                Seu perfil não possui um plano associado. Fale com seu professor
+                para ativar seu plano e liberar o check-in.
+              </p>
+            </div>
+          ) : null}
+
           {currentWeekInfo && (
             <div className="relative z-10 min-w-0 space-y-5 sm:space-y-6">
               <div className="min-w-0 space-y-2 text-left">

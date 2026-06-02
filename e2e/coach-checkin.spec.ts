@@ -1,23 +1,29 @@
 import { test, expect } from "@playwright/test";
 import { E2E_LABELS } from "./constants";
 import { coachSidebar } from "./helpers/dashboard";
-import { clearStudentCheckinData, restoreDefaultStudentProfile } from "./helpers/emulator";
-import { nextWeekdayDateKeyFromToday } from "./helpers/dates";
+import { performAdvanceCheckin } from "./helpers/checkin";
+import {
+  clearStudentCheckinData,
+  resetE2eStudentState,
+} from "./helpers/emulator";
 
 test.describe.configure({ mode: "serial" });
 
 test.describe("coach — acompanhamento de check-ins", () => {
   test.beforeAll(async () => {
     await clearStudentCheckinData();
-    await restoreDefaultStudentProfile();
+    await resetE2eStudentState();
+  });
+
+  test.afterAll(async () => {
+    await clearStudentCheckinData();
+    await resetE2eStudentState();
   });
 
   test("registra check-in do aluno E2E e exibe na aba Check-Ins", async ({
     page,
     browser,
   }) => {
-    const targetDate = nextWeekdayDateKeyFromToday(1);
-
     const studentContext = await browser.newContext({
       storageState: "e2e/.auth/student.json",
     });
@@ -26,13 +32,7 @@ test.describe("coach — acompanhamento de check-ins", () => {
     await expect(studentPage.getByTestId("student-logout")).toBeVisible({
       timeout: 30_000,
     });
-    await studentPage.getByTestId(`student-checkin-date-${targetDate}`).click();
-    const submit = studentPage.getByTestId("student-checkin-submit");
-    await expect(submit).toBeEnabled({ timeout: 15_000 });
-    await submit.click();
-    await expect(
-      studentPage.getByRole("status").filter({ hasText: "Check-in realizado" }),
-    ).toBeVisible();
+    const targetDate = await performAdvanceCheckin(studentPage);
     await studentContext.close();
 
     await page.goto("/dashboard");
@@ -41,9 +41,15 @@ test.describe("coach — acompanhamento de check-ins", () => {
       timeout: 30_000,
     });
 
+    await page.locator('input[type="date"]').fill(targetDate);
     await page.locator("select").nth(1).selectOption({ label: E2E_LABELS.studentName });
-    await expect(page.getByText(E2E_LABELS.className)).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText(E2E_LABELS.studentName)).toBeVisible();
+
+    const checkinCard = page
+      .locator("main .dashboard-card.group")
+      .filter({ hasText: E2E_LABELS.studentName })
+      .filter({ hasText: E2E_LABELS.className });
+    await expect(checkinCard).toBeVisible({ timeout: 15_000 });
+    await expect(checkinCard.getByText("Realizado")).toBeVisible();
   });
 
   test("abre histórico de check-ins do aluno na gestão", async ({ page }) => {

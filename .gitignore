@@ -53,5 +53,5 @@ tertoct-prod.json
 
 
 .ai*
-
 .cursor
+*.log

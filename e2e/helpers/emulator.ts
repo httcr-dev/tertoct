@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { E2E_IDS, E2E_LABELS, E2E_PROJECT_ID } from "../constants";
+import { currentWeekIsoKey, workWeekDateKeys } from "./dates";
 import { getDateKeyForOffset } from "../../src/lib/utils/dateKey";
 
 const UTC_OFFSET = -180;
@@ -146,19 +147,36 @@ export async function setClassFullForDate(
     });
 }
 
+/** Preenche limite semanal (3 check-ins) com documentos reais + contador. */
 export async function fillWeeklyCheckinLimit(): Promise<void> {
   const db = getDb();
-  const { startOfWeek } = await import("../../src/lib/utils/date");
-  const weekKey = startOfWeek(new Date()).toISOString().slice(0, 10);
-  await db
-    .collection("checkinCounters")
-    .doc(`${E2E_IDS.studentUid}_${weekKey}`)
-    .set({
-      userId: E2E_IDS.studentUid,
+  const { studentUid, planId, classId } = E2E_IDS;
+  const weekKey = currentWeekIsoKey();
+  const dateKeys = workWeekDateKeys().slice(0, 3);
+  const now = Timestamp.now();
+  const batch = db.batch();
+
+  for (const classDateKey of dateKeys) {
+    batch.set(db.collection("checkins").doc(`${studentUid}_${classId}_${classDateKey}`), {
+      userId: studentUid,
+      planId,
+      classId,
+      classDateKey,
+      className: E2E_LABELS.className,
+      classStartTime: "20:00",
       weekKey,
-      count: 3,
-      updatedAt: Timestamp.now(),
+      createdAt: now,
     });
+  }
+
+  batch.set(db.collection("checkinCounters").doc(`${studentUid}_${weekKey}`), {
+    userId: studentUid,
+    weekKey,
+    count: 3,
+    updatedAt: now,
+  });
+
+  await batch.commit();
 }
 
 /** Deadline already passed today; start remains after deadline. */
@@ -179,4 +197,10 @@ export async function restoreDefaultClassSchedule(): Promise<void> {
     capacity: 20,
     active: true,
   });
+}
+
+/** Restaura perfil e turma padrão do aluno E2E (use entre specs/arquivos). */
+export async function resetE2eStudentState(): Promise<void> {
+  await restoreDefaultStudentProfile();
+  await restoreDefaultClassSchedule();
 }
