@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  onAuthStateChanged,
   onIdTokenChanged,
   signOut,
   type User as FirebaseUser,
@@ -9,7 +10,7 @@ import {
 import { consumeRedirectResult } from "@/lib/firebase/redirectResult";
 import {
   deleteAuthSessionCookie,
-  postAuthSessionCookie,
+  postAuthSessionCookieWithRetry,
 } from "@/lib/auth/clientSession";
 import {
   AppUserProfile,
@@ -20,8 +21,13 @@ import {
 import {
   initialCookieSyncState,
   shouldSyncCookie,
+  type CookieSyncState,
 } from "@/components/auth/cookieSyncState";
 import { mapAuthError, pendingSignInFailureMessage } from "@/components/auth/authErrors";
+import {
+  isAuthRateLimitError,
+  isFatalAuthSessionError,
+} from "@/lib/auth/sessionErrors";
 import {
   AUTH_PENDING_GRACE_MS,
   clearAuthPendingExpiry,
@@ -30,11 +36,16 @@ import {
   markSignInPending,
 } from "@/components/auth/pendingSignIn";
 import { signInWithGooglePopupFirst } from "@/components/auth/signInGoogle";
-import { refreshAuthClaimsFromServer } from "@/lib/auth/clientRefreshClaims";
+import {
+  refreshAuthClaimsFromServer,
+  shouldRefreshAuthClaims,
+} from "@/lib/auth/clientRefreshClaims";
 
 export type AuthSessionState = {
   firebaseUser: FirebaseUser | null;
   profile: AppUserProfile | null;
+  /** Firebase persistence has emitted its first auth state (signed in or out). */
+  authReady: boolean;
   loading: boolean;
   authPending: boolean;
   authError: string | null;
@@ -42,9 +53,18 @@ export type AuthSessionState = {
   signOutUser: () => Promise<void>;
 };
 
+async function persistSessionCookie(
+  token: string,
+  syncState: CookieSyncState,
+): Promise<CookieSyncState> {
+  await postAuthSessionCookieWithRetry(token);
+  return { token, expiration: syncState.expiration };
+}
+
 export function useAuthSession(): AuthSessionState {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [profile, setProfile] = useState<AppUserProfile | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [authPending, setAuthPending] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -57,6 +77,7 @@ export function useAuthSession(): AuthSessionState {
   );
   const hasCookieRef = useRef(false);
   const userSessionSyncInFlightRef = useRef(0);
+  const claimsSyncedUidRef = useRef<string | null>(null);
 
   const setPending = useCallback((pending: boolean) => {
     setAuthPending(pending);
@@ -81,6 +102,7 @@ export function useAuthSession(): AuthSessionState {
         setAuthError(pendingSignInFailureMessage(window.location.hostname));
         setPending(false);
         setLoading(false);
+        setAuthReady(true);
         clearAuthPendingExpiry();
       }
     }, AUTH_PENDING_GRACE_MS);
@@ -90,6 +112,11 @@ export function useAuthSession(): AuthSessionState {
     const auth = getFirebaseAuth();
     let unsubscribe: (() => void) | null = null;
     let bootstrapTimeout: ReturnType<typeof setTimeout> | undefined;
+
+    const finishAuthBootstrap = () => {
+      setAuthReady(true);
+      setLoading(false);
+    };
 
     const syncUserSession = async (user: FirebaseUser): Promise<void> => {
       if (recoveringSessionRef.current) return;
@@ -101,54 +128,74 @@ export function useAuthSession(): AuthSessionState {
 
       try {
         const tokenResult = await user.getIdTokenResult();
-        const nextSyncState = {
+        let syncState: CookieSyncState = {
           token: tokenResult.token,
           expiration: tokenResult.expirationTime,
         };
 
-        if (shouldSyncCookie(cookieSyncStateRef.current, nextSyncState)) {
-          await postAuthSessionCookie(tokenResult.token);
-          cookieSyncStateRef.current = nextSyncState;
+        if (shouldSyncCookie(cookieSyncStateRef.current, syncState)) {
+          syncState = await persistSessionCookie(tokenResult.token, syncState);
+          cookieSyncStateRef.current = syncState;
           hasCookieRef.current = true;
         }
 
         const ensured = await ensureUserDocument(user);
         if (authEventId !== authEventIdRef.current) return;
 
-        try {
-          await refreshAuthClaimsFromServer();
-          const refreshed = await user.getIdTokenResult(true);
-          if (shouldSyncCookie(cookieSyncStateRef.current, {
-            token: refreshed.token,
-            expiration: refreshed.expirationTime,
-          })) {
-            await postAuthSessionCookie(refreshed.token);
-            cookieSyncStateRef.current = {
-              token: refreshed.token,
-              expiration: refreshed.expirationTime,
-            };
+        const needsClaims =
+          claimsSyncedUidRef.current !== user.uid ||
+          shouldRefreshAuthClaims(tokenResult.claims, ensured.role);
+
+        if (needsClaims) {
+          try {
+            const refreshed = await refreshAuthClaimsFromServer(user);
+            cookieSyncStateRef.current = refreshed;
             hasCookieRef.current = true;
+            claimsSyncedUidRef.current = user.uid;
+          } catch (claimsError) {
+            if (isAuthRateLimitError(claimsError)) {
+              throw claimsError;
+            }
+            console.warn("[auth] Claims sync skipped:", claimsError);
           }
-        } catch (claimsError) {
-          console.warn("[auth] Claims sync skipped:", claimsError);
         }
 
         clearPendingTimeout();
         setPending(false);
         setProfile(ensured);
         setFirebaseUser(user);
-        setLoading(false);
+        finishAuthBootstrap();
       } catch (error) {
         console.error("Failed to ensure user document or set cookie", error);
         if (authEventId !== authEventIdRef.current) return;
 
+        if (isAuthRateLimitError(error)) {
+          setAuthError(
+            "Muitas tentativas em pouco tempo. Aguarde cerca de 1 minuto e atualize a página.",
+          );
+          setProfile(null);
+          setFirebaseUser(user);
+          setPending(false);
+          finishAuthBootstrap();
+          return;
+        }
+
+        if (!isFatalAuthSessionError(error)) {
+          setAuthError(mapAuthError(error));
+          setFirebaseUser(user);
+          setPending(false);
+          finishAuthBootstrap();
+          return;
+        }
+
         setAuthError(mapAuthError(error));
         recoveringSessionRef.current = true;
         cookieSyncStateRef.current = initialCookieSyncState;
+        claimsSyncedUidRef.current = null;
         setFirebaseUser(null);
         setProfile(null);
         setPending(false);
-        setLoading(false);
+        finishAuthBootstrap();
 
         if (hasCookieRef.current) {
           hasCookieRef.current = false;
@@ -173,6 +220,7 @@ export function useAuthSession(): AuthSessionState {
       if (userSessionSyncInFlightRef.current > 0) return;
 
       cookieSyncStateRef.current = initialCookieSyncState;
+      claimsSyncedUidRef.current = null;
       setProfile(null);
       setFirebaseUser(null);
 
@@ -190,7 +238,7 @@ export function useAuthSession(): AuthSessionState {
         setPending(false);
       }
 
-      setLoading(false);
+      finishAuthBootstrap();
     };
 
     const initAuth = async () => {
@@ -200,16 +248,23 @@ export function useAuthSession(): AuthSessionState {
         setAuthPending(true);
       } else {
         clearAuthPendingExpiry();
-        setAuthPending(false);
+        setPending(false);
       }
 
       bootstrapTimeout = setTimeout(() => {
         if (!auth.currentUser) {
           clearAuthPendingExpiry();
           setAuthPending(false);
-          setLoading(false);
+          finishAuthBootstrap();
         }
       }, 10_000);
+
+      await new Promise<void>((resolve) => {
+        const unsubReady = onAuthStateChanged(auth, () => {
+          unsubReady();
+          resolve();
+        });
+      });
 
       unsubscribe = onIdTokenChanged(auth, (user) => {
         if (recoveringSessionRef.current && user) return;
@@ -230,12 +285,8 @@ export function useAuthSession(): AuthSessionState {
         console.error("Error handling redirect result", error);
         setAuthError(mapAuthError(error));
         setPending(false);
-        setLoading(false);
+        finishAuthBootstrap();
         clearAuthPendingExpiry();
-      }
-
-      if (!auth.currentUser) {
-        setLoading(false);
       }
     };
 
@@ -255,6 +306,7 @@ export function useAuthSession(): AuthSessionState {
     setAuthError(null);
     setPending(true);
     setLoading(true);
+    setAuthReady(false);
 
     try {
       await signInWithGooglePopupFirst(auth, googleProvider);
@@ -264,23 +316,27 @@ export function useAuthSession(): AuthSessionState {
         setAuthError(mapAuthError(error));
         setPending(false);
         setLoading(false);
+        setAuthReady(true);
         return;
       }
       setAuthError(mapAuthError(error));
       setPending(false);
       setLoading(false);
+      setAuthReady(true);
       throw error;
     }
   }, [setPending]);
 
   const signOutUser = useCallback(async () => {
     userSessionSyncInFlightRef.current = 0;
+    claimsSyncedUidRef.current = null;
     await signOut(getFirebaseAuth());
   }, []);
 
   return {
     firebaseUser,
     profile,
+    authReady,
     loading,
     authPending,
     authError,

@@ -61,7 +61,10 @@ test.describe("coach — acompanhamento de check-ins", () => {
     const row = page.locator("table tbody tr").filter({
       hasText: E2E_LABELS.studentName,
     });
-    await row.getByRole("button", { name: "Histórico" }).click();
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    await row
+      .getByRole("button", { name: E2E_LABELS.studentName })
+      .click();
 
     const modal = page.locator(".animate-modal-in");
     await expect(modal).toBeVisible({ timeout: 15_000 });

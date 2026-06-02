@@ -9,16 +9,16 @@ import { PageLoader } from "@/components/ui/PageLoader";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { firebaseUser, profile, loading, authPending } = useAuth();
-  const sessionLoading = loading || authPending;
+  const { firebaseUser, profile, loading, authPending, authReady } = useAuth();
+  const sessionLoading = !authReady || loading || authPending;
 
   const role = useMemo(() => profile?.role ?? null, [profile]);
 
   useEffect(() => {
-    if (!sessionLoading && !firebaseUser) {
+    if (authReady && !loading && !authPending && !firebaseUser) {
       router.replace("/");
     }
-  }, [sessionLoading, firebaseUser, router]);
+  }, [authReady, loading, authPending, firebaseUser, router]);
 
   if (sessionLoading) {
     return <PageLoader message="Carregando seu painel..." fullScreen={false} />;

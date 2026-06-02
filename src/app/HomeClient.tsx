@@ -23,13 +23,24 @@ export function HomeClient({
   initialCoaches: CoachCardData[];
 }) {
   const router = useRouter();
-  const { firebaseUser, authError, signInWithGoogle } = useAuth();
+  const { firebaseUser, authError, signInWithGoogle, loading, authPending, authReady } =
+    useAuth();
+
+  const sessionLoading = !authReady || loading || authPending;
 
   useEffect(() => {
-    if (firebaseUser) {
+    if (authReady && firebaseUser) {
       router.replace("/dashboard");
     }
-  }, [firebaseUser, router]);
+  }, [authReady, firebaseUser, router]);
+
+  if (sessionLoading) {
+    return (
+      <div className="relative min-h-screen overflow-x-hidden bg-black font-sans text-zinc-50">
+        <PageLoader message="Carregando..." />
+      </div>
+    );
+  }
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-black font-sans text-zinc-50">

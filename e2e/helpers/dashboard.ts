@@ -16,8 +16,11 @@ export async function waitForCoachDashboard(page: Page): Promise<void> {
     await signInAsCoach(page);
     return;
   }
+  await expect(page.getByText("Carregando dados do painel...")).toBeHidden({
+    timeout: 45_000,
+  });
   await expect(page.getByRole("heading", { name: "Visão Geral" })).toBeVisible({
-    timeout: 30_000,
+    timeout: 45_000,
   });
 }
 

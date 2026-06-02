@@ -1,8 +1,18 @@
-import { getFirebaseAuth } from "@/lib/firebase/client";
-import { postAuthSessionCookie } from "@/lib/auth/clientSession";
+import type { User } from "firebase/auth";
+import { postAuthSessionCookieWithRetry } from "@/lib/auth/clientSession";
+import type { CookieSyncState } from "@/components/auth/cookieSyncState";
 
-/** Syncs custom claims from Firestore and refreshes the HTTP-only session cookie. */
-export async function refreshAuthClaimsFromServer(): Promise<void> {
+export type RefreshedSessionTokens = CookieSyncState & {
+  token: string;
+};
+
+/**
+ * Syncs custom claims from Firestore, forces a new ID token, and updates the
+ * HTTP-only session cookie once.
+ */
+export async function refreshAuthClaimsFromServer(
+  user: User,
+): Promise<RefreshedSessionTokens> {
   const response = await fetch("/api/auth/refresh-claims", {
     method: "POST",
     credentials: "include",
@@ -18,9 +28,22 @@ export async function refreshAuthClaimsFromServer(): Promise<void> {
     throw new Error(message);
   }
 
-  const user = getFirebaseAuth().currentUser;
-  if (!user) return;
+  const tokenResult = await user.getIdTokenResult(true);
+  await postAuthSessionCookieWithRetry(tokenResult.token);
 
-  const token = await user.getIdToken(true);
-  await postAuthSessionCookie(token);
+  return {
+    token: tokenResult.token,
+    expiration: tokenResult.expirationTime,
+  };
+}
+
+export function shouldRefreshAuthClaims(
+  tokenClaims: Record<string, unknown> | undefined,
+  profileRole: string,
+): boolean {
+  const claimRole = tokenClaims?.role;
+  if (typeof claimRole !== "string" || claimRole.length === 0) {
+    return true;
+  }
+  return claimRole !== profileRole;
 }
