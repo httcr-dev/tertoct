@@ -88,7 +88,7 @@ export function useAuthSession(): AuthSessionState {
   useEffect(() => {
     const auth = getFirebaseAuth();
     let unsubscribe: (() => void) | null = null;
-    let bootstrapTimeout: ReturnType<typeof window.setTimeout> | undefined;
+    let bootstrapTimeout: ReturnType<typeof setTimeout> | undefined;
 
     const syncUserSession = async (user: FirebaseUser): Promise<void> => {
       if (recoveringSessionRef.current) return;
@@ -184,7 +184,7 @@ export function useAuthSession(): AuthSessionState {
         setAuthPending(false);
       }
 
-      bootstrapTimeout = window.setTimeout(() => {
+      bootstrapTimeout = setTimeout(() => {
         if (!auth.currentUser) {
           clearAuthPendingExpiry();
           setAuthPending(false);
@@ -224,7 +224,7 @@ export function useAuthSession(): AuthSessionState {
 
     return () => {
       if (bootstrapTimeout !== undefined) {
-        window.clearTimeout(bootstrapTimeout);
+        clearTimeout(bootstrapTimeout);
       }
       clearPendingTimeout();
       unsubscribe?.();

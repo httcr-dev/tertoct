@@ -33,7 +33,7 @@ export function filterStudents(
           name: s.name,
           email: s.email,
           role: "student",
-          active: s.active,
+          active: s.active ?? true,
           planId: s.planId,
           paymentDueDay: s.paymentDueDay,
           monthlyPaymentPaid: s.monthlyPaymentPaid,
