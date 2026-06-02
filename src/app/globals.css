@@ -347,6 +347,32 @@ body {
 }
 
 /* Landing — boxing gym atmosphere */
+.landing-section {
+  margin-top: 3rem;
+}
+
+@media (min-width: 640px) {
+  .landing-section {
+    margin-top: 4rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .landing-section {
+    margin-top: 5rem;
+  }
+}
+
+.landing-section.landing-cta-frame {
+  margin-top: 4rem;
+}
+
+@media (min-width: 640px) {
+  .landing-section.landing-cta-frame {
+    margin-top: 5rem;
+  }
+}
+
 @keyframes landing-scroll-hint {
   0%,
   100% {
@@ -444,4 +470,22 @@ body {
   bottom: 12px;
   right: 12px;
   border-width: 0 2px 2px 0;
+}
+
+@media (max-width: 639px) {
+  .landing-cta-frame::before,
+  .landing-cta-frame::after {
+    width: 16px;
+    height: 16px;
+  }
+
+  .landing-cta-frame::before {
+    top: 8px;
+    left: 8px;
+  }
+
+  .landing-cta-frame::after {
+    bottom: 8px;
+    right: 8px;
+  }
 }
