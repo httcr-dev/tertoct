@@ -1,9 +1,12 @@
 import { aggregateCheckinsByClass } from "./checkins";
 import type { CheckIn } from "@/lib/types";
 
-function makeCheckin(
-  overrides: Partial<CheckIn> & { createdAt: Date | number },
-): CheckIn {
+type CheckinTestOverrides = Partial<Omit<CheckIn, "createdAt">> & {
+  createdAt?: Date | number | { toDate: () => Date };
+};
+
+function makeCheckin(overrides: CheckinTestOverrides = {}): CheckIn {
+  const { createdAt = new Date(0), ...rest } = overrides;
   return {
     id: "ci-1",
     userId: "u1",
@@ -12,8 +15,9 @@ function makeCheckin(
     classDateKey: null,
     className: null,
     classStartTime: null,
-    createdAt: new Date(0),
-    ...overrides,
+    ...rest,
+    // Runtime accepts number / Firestore timestamps; CheckIn types createdAt as Date.
+    createdAt: createdAt as Date,
   };
 }
 
