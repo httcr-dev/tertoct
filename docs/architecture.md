@@ -190,6 +190,10 @@ Dashboard / private APIs
 * Firebase Auth on the client (`AuthProvider`, `useAuthSession`).
 * HTTPOnly cookie (`authToken`) for server/middleware/API.
 * `verifyToken` with `checkRevoked` enabled in production (`getVerifyTokenOptions()`); disabled on emulators/dev unless `FIREBASE_CHECK_REVOKED=true`.
+* Private API role: Firestore `users.role` overrides JWT claims when the profile exists.
+* `POST /api/auth/refresh-claims` syncs custom claims from Firestore; client refreshes ID token + session cookie after login.
+* Coach 30-day check-in counts: `GET /api/private/checkins/counts` (server aggregation) instead of a client listener on all check-ins.
+* Check-in blocked when `users.active === false`.
 * Cookie flags: `httpOnly`, `secure` (prod), `sameSite`.
 
 Client auth extras:

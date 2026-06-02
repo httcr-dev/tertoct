@@ -39,8 +39,8 @@ export async function getPrivateRouteContext(): Promise<
               ? "student"
               : null;
 
-    // Fallback if custom claims are not set: read authoritative role from Firestore
-    if (!role && session.uid) {
+    // Firestore is authoritative when the profile exists (avoids stale JWT role claims).
+    if (session.uid) {
       try {
         const db = getAdminFirestore();
         const userDoc = await db.collection("users").doc(session.uid).get();
@@ -52,7 +52,7 @@ export async function getPrivateRouteContext(): Promise<
         }
       } catch (err) {
         console.warn(
-          "[privateRoute] Failed to fetch role from Firestore fallback:",
+          "[privateRoute] Failed to fetch role from Firestore:",
           err,
         );
       }

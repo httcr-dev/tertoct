@@ -70,6 +70,13 @@ export async function POST(req: Request) {
 
       const user = userSnap.data() ?? {};
       const plan = planSnap.data() ?? {};
+
+      if (user.active === false) {
+        throw new Error(
+          "Conta desativada. Entre em contato com a recepção para reativar seu acesso.",
+        );
+      }
+
       if (user.planId !== planId || plan.active !== true) {
         throw new Error("Seu plano não está válido para este check-in.");
       }

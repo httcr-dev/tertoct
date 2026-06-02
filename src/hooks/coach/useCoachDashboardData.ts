@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import type { CheckIn, GymClass, Plan, StudentSummary } from "@/lib/types";
 import { getWeekStart } from "@/lib/utils/weekFilters";
 import {
+  fetchCheckinCountsByCoach,
   fetchRecentCheckinsSince,
-  listenCheckinCountsSince,
+  getCoachCheckinCountsPollIntervalMs,
   listenCoaches,
   listenPlans,
   listenStudents,
@@ -82,21 +83,34 @@ export function useCoachDashboardData(options: UseCoachDashboardDataOptions) {
       () => emptyOnPermissionError(setStudents, [], "students"),
     );
 
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const unsubMonthly = listenCheckinCountsSince(
-      thirtyDaysAgo,
-      (counts) => {
-        setCheckinCounts(counts);
-        markLoaded("checkins");
-      },
-      () => emptyOnPermissionError(setCheckinCounts, new Map(), "checkins"),
-    );
+    let cancelled = false;
+    const loadCounts = async () => {
+      try {
+        const counts = await fetchCheckinCountsByCoach(30);
+        if (!cancelled) setCheckinCounts(counts);
+      } catch {
+        if (!cancelled) setCheckinCounts(new Map());
+      } finally {
+        if (!cancelled) markLoaded("checkins");
+      }
+    };
+    void loadCounts();
+    const countsInterval = window.setInterval(() => {
+      void fetchCheckinCountsByCoach(30)
+        .then((counts) => {
+          if (!cancelled) setCheckinCounts(counts);
+        })
+        .catch(() => {
+          /* keep previous counts on poll failure */
+        });
+    }, getCoachCheckinCountsPollIntervalMs());
 
     return () => {
+      cancelled = true;
+      window.clearInterval(countsInterval);
       unsubPlans();
       unsubClasses();
       unsubStudents();
-      unsubMonthly();
     };
   }, []);
 

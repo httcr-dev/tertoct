@@ -165,6 +165,27 @@ describe("POST /api/private/checkins", () => {
     expect(json.error).toMatch(/não disponível/i);
   });
 
+  it("rejects check-in when student account is inactive", async () => {
+    const mock = createFirestoreMock(
+      baseSeed({
+        users: {
+          [STUDENT_ID]: {
+            planId: PLAN_ID,
+            active: false,
+            monthlyPaymentPaid: true,
+          },
+        },
+      }),
+    );
+    mockGetAdminFirestore.mockReturnValue(mock.db);
+
+    const response = await postCheckin();
+    const json = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(json.error).toMatch(/desativada/i);
+  });
+
   it("rejects check-in when plan does not match user", async () => {
     const mock = createFirestoreMock(
       baseSeed({

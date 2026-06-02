@@ -30,6 +30,7 @@ export interface CheckinTabProps {
   } | null;
   plan: Plan | null;
   paymentOverdue: boolean;
+  accountInactive?: boolean;
   classes: GymClass[];
   selectedClassId: string;
   onSelectedClassIdChange: (classId: string) => void;
@@ -51,6 +52,7 @@ export function CheckinTab({
   currentWeekInfo,
   plan,
   paymentOverdue,
+  accountInactive = false,
   classes,
   selectedClassId,
   onSelectedClassIdChange,
@@ -275,6 +277,8 @@ export function CheckinTab({
                   "Check-in já realizado"
                 ) : !plan.active ? (
                   "Plano inativo"
+                ) : accountInactive ? (
+                  "Conta desativada"
                 ) : paymentOverdue ? (
                   "Mensalidade pendente"
                 ) : !selectedClassWindowOpen ? (
@@ -307,7 +311,9 @@ export function CheckinTab({
 
               {!canCheckIn && checkInStatus === "idle" && (
                 <p className="rounded-full border border-red-500/10 bg-red-500/5 py-2 text-xs font-medium text-red-400/80">
-                  {paymentOverdue
+                  {accountInactive
+                    ? "Sua conta está desativada. Procure a recepção para reativar o acesso."
+                    : paymentOverdue
                     ? "Mensalidade pendente. Procure seu professor para regularizar."
                     : !plan
                       ? "Seu perfil não possui um plano associado."

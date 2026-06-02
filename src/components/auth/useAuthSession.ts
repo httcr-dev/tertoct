@@ -30,6 +30,7 @@ import {
   markSignInPending,
 } from "@/components/auth/pendingSignIn";
 import { signInWithGooglePopupFirst } from "@/components/auth/signInGoogle";
+import { refreshAuthClaimsFromServer } from "@/lib/auth/clientRefreshClaims";
 
 export type AuthSessionState = {
   firebaseUser: FirebaseUser | null;
@@ -113,6 +114,24 @@ export function useAuthSession(): AuthSessionState {
 
         const ensured = await ensureUserDocument(user);
         if (authEventId !== authEventIdRef.current) return;
+
+        try {
+          await refreshAuthClaimsFromServer();
+          const refreshed = await user.getIdTokenResult(true);
+          if (shouldSyncCookie(cookieSyncStateRef.current, {
+            token: refreshed.token,
+            expiration: refreshed.expirationTime,
+          })) {
+            await postAuthSessionCookie(refreshed.token);
+            cookieSyncStateRef.current = {
+              token: refreshed.token,
+              expiration: refreshed.expirationTime,
+            };
+            hasCookieRef.current = true;
+          }
+        } catch (claimsError) {
+          console.warn("[auth] Claims sync skipped:", claimsError);
+        }
 
         clearPendingTimeout();
         setPending(false);
