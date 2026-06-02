@@ -19,7 +19,7 @@ test.describe("coach autenticado", () => {
     await coachSidebar(page).getByTestId("coach-tab-students").click();
     await expect(page.locator("header h1")).toHaveText("Alunos");
     await expect(
-      page.locator("h3").filter({ hasText: E2E_LABELS.studentName }),
+      page.getByRole("row").filter({ hasText: E2E_LABELS.studentName }),
     ).toBeVisible();
   });
 
