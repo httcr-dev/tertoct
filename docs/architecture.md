@@ -147,7 +147,7 @@ src/
 │   └── ui/
 │
 ├── lib/
-│   ├── auth/              # verifyToken, privateRoute, rbac, rate limits, admin
+│   ├── auth/              # verifyToken, privateRoute, rate limits, admin
 │   ├── firebase/          # client SDK, emulators, redirect
 │   ├── firestore/         # refs, mappers
 │   ├── security/          # origin allowlist (mutations)
@@ -189,7 +189,11 @@ Dashboard / private APIs
 
 * Firebase Auth on the client (`AuthProvider`, `useAuthSession`).
 * HTTPOnly cookie (`authToken`) for server/middleware/API.
-* `verifyToken` with `checkRevoked: false` in dev (ADC limitations); cryptographic expiry still enforced.
+* `verifyToken` with `checkRevoked` enabled in production (`getVerifyTokenOptions()`); disabled on emulators/dev unless `FIREBASE_CHECK_REVOKED=true`.
+* Private API role: Firestore `users.role` overrides JWT claims when the profile exists.
+* `POST /api/auth/refresh-claims` syncs custom claims from Firestore; client refreshes ID token + session cookie after login.
+* Coach 30-day check-in counts: `GET /api/private/checkins/counts` (server aggregation) instead of a client listener on all check-ins.
+* Check-in blocked when `users.active === false`.
 * Cookie flags: `httpOnly`, `secure` (prod), `sameSite`.
 
 Client auth extras:
@@ -417,19 +421,25 @@ Admin SDK transaction / update
 POST   /api/private/checkins
 DELETE /api/private/checkins/[checkinId]
 
-GET/POST        /api/private/classes
+POST            /api/private/classes
 PATCH/DELETE    /api/private/classes/[classId]
 
-GET/POST        /api/private/plans
+POST            /api/private/plans
 PATCH/DELETE    /api/private/plans/[planId]
 POST            /api/private/plans/[planId]/toggle
 
 PATCH           /api/private/users/[userId]   # assign-plan, payment, phone, toggle-active, …
 
-GET/POST        /api/private/feedback
+POST            /api/private/feedback
 DELETE          /api/private/feedback/[feedbackId]
 
-POST            /api/private/clearRateLimits   # admin
+DELETE          /api/private/clearRateLimits   # bearer secret (dev/ops)
+```
+
+## Public routes
+
+```txt
+GET    /api/public/feedbacks   # landing feedback wall (Admin SDK read)
 ```
 
 ---

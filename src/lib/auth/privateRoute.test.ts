@@ -16,6 +16,7 @@ jest.mock("@/lib/auth/admin", () => ({
   getAdminFirestore: () => mockGetAdminFirestore(),
 }));
 
+import { getVerifyTokenOptions } from "./verifyTokenOptions";
 import {
   getPrivateRouteContext,
   requireRole,
@@ -50,6 +51,13 @@ describe("getPrivateRouteContext", () => {
       get: (name: string) =>
         name === "authToken" ? { value: "token-abc" } : undefined,
     });
+    mockGetAdminFirestore.mockReturnValue({
+      collection: () => ({
+        doc: () => ({
+          get: async () => ({ exists: false }),
+        }),
+      }),
+    });
   });
 
   it("returns 401 when cookie is missing", async () => {
@@ -71,9 +79,10 @@ describe("getPrivateRouteContext", () => {
       expect(result.context.role).toBe("coach");
       expect(result.context.session.uid).toBe("u1");
     }
-    expect(mockVerifyToken).toHaveBeenCalledWith("token-abc", {
-      checkRevoked: false,
-    });
+    expect(mockVerifyToken).toHaveBeenCalledWith(
+      "token-abc",
+      getVerifyTokenOptions(),
+    );
   });
 
   it("maps admin boolean claim to admin role", async () => {
@@ -85,7 +94,26 @@ describe("getPrivateRouteContext", () => {
     if (result.ok) expect(result.context.role).toBe("admin");
   });
 
-  it("falls back to Firestore when role claim is missing", async () => {
+  it("prefers Firestore role over stale JWT claim", async () => {
+    mockVerifyToken.mockResolvedValueOnce({ uid: "u1", role: "coach" });
+    mockGetAdminFirestore.mockReturnValue({
+      collection: () => ({
+        doc: () => ({
+          get: async () => ({
+            exists: true,
+            data: () => ({ role: "student" }),
+          }),
+        }),
+      }),
+    });
+
+    const result = await getPrivateRouteContext();
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.context.role).toBe("student");
+  });
+
+  it("reads role from Firestore when JWT claim is missing", async () => {
     mockVerifyToken.mockResolvedValueOnce({ uid: "u1" });
     mockGetAdminFirestore.mockReturnValue({
       collection: () => ({

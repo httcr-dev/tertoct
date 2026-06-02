@@ -8,6 +8,7 @@ import { isTrustedMutationRequest } from "@/lib/security/origin";
 import { startOfWeek } from "@/lib/utils/date";
 import { parseHHmm } from "@/lib/utils/time";
 import { getDateKeyForOffset, utcDateAtLocalTime } from "@/lib/utils/dateKey";
+import { assertCheckinDateKeyAllowed } from "@/lib/utils/checkinDate";
 import { isPaymentOverdue } from "@/lib/utils/payment";
 import type { AppUserProfile } from "@/lib/types";
 
@@ -69,6 +70,13 @@ export async function POST(req: Request) {
 
       const user = userSnap.data() ?? {};
       const plan = planSnap.data() ?? {};
+
+      if (user.active === false) {
+        throw new Error(
+          "Conta desativada. Entre em contato com a recepção para reativar seu acesso.",
+        );
+      }
+
       if (user.planId !== planId || plan.active !== true) {
         throw new Error("Seu plano não está válido para este check-in.");
       }
@@ -148,6 +156,9 @@ export async function POST(req: Request) {
       if (classDateKey < todayDateKey) {
         throw new Error("Não é possível fazer check-in para datas passadas.");
       }
+
+      // Match student UI: only weekdays remaining in the current work week
+      assertCheckinDateKeyAllowed(classDateKey, now);
 
       // Enforce one check-in per (user, class, date) with deterministic id.
       const checkinId = `${userId}_${classId}_${classDateKey}`;

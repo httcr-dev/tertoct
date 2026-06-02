@@ -184,12 +184,15 @@ export function StudentDashboard() {
 
   const hasActivePlan = !!(plan && plan.active);
 
+  const accountInactive = profile?.active === false;
+
   const canCheckIn = !!(
     plan &&
     currentWeekInfo &&
     currentWeekInfo.remaining > 0 &&
     plan.active &&
     !paymentOverdue &&
+    !accountInactive &&
     selectedClassId
   );
 
@@ -489,6 +492,7 @@ export function StudentDashboard() {
               currentWeekInfo={currentWeekInfo}
               plan={plan}
               paymentOverdue={paymentOverdue}
+              accountInactive={accountInactive}
               classes={classes}
               selectedClassId={selectedClassId}
               onSelectedClassIdChange={setSelectedClassId}

@@ -1,8 +1,6 @@
 import {
   collection,
-  limit,
   onSnapshot,
-  orderBy,
   query,
   where,
   type Unsubscribe,
@@ -36,7 +34,6 @@ function feedbacksCol() {
   return collection(getFirestoreDb(), "feedbacks");
 }
 
-// Note: keep these helpers simple; rules enforce auth/limits.
 export async function createFeedback(params: {
   userId: string;
   userName: string | null;
@@ -90,29 +87,3 @@ export function listenMyFeedbacks(
     onError,
   );
 }
-
-/**
- * @deprecated Prefer {@link fetchPublicFeedbacks} — Firestore rules no longer allow anonymous reads.
- */
-export function listenPublicFeedbacks(
-  onData: (items: Feedback[]) => void,
-  onError?: (error: unknown) => void,
-): Unsubscribe {
-  const q = query(
-    feedbacksCol(),
-    orderBy("createdAt", "desc"),
-    limit(30),
-  );
-  return onSnapshot(
-    q,
-    (snap) => {
-      const items: Feedback[] = snap.docs.map((d) => ({
-        id: d.id,
-        ...(d.data() as Omit<Feedback, "id">),
-      }));
-      onData(items);
-    },
-    onError,
-  );
-}
-

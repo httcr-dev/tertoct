@@ -2,9 +2,7 @@ export {};
 
 const mockCollection = jest.fn(() => "feedback-col-ref");
 const mockGetFirestoreDb = jest.fn(() => "mock-db");
-const mockLimit = jest.fn((n: number) => `limit-${n}`);
 const mockOnSnapshot = jest.fn();
-const mockOrderBy = jest.fn(() => "order-by-createdAt-desc");
 const mockQuery = jest.fn((...args: unknown[]) => ({ args }));
 const mockWhere = jest.fn(() => "where-user-id");
 
@@ -13,9 +11,7 @@ jest.mock("firebase/firestore", () => ({
   collection: mockCollection,
   deleteDoc: jest.fn(),
   doc: jest.fn(),
-  limit: mockLimit,
   onSnapshot: mockOnSnapshot,
-  orderBy: mockOrderBy,
   query: mockQuery,
   serverTimestamp: jest.fn(),
   where: mockWhere,
@@ -30,7 +26,6 @@ import {
   deleteFeedback,
   fetchPublicFeedbacks,
   listenMyFeedbacks,
-  listenPublicFeedbacks,
 } from "./feedbackService";
 
 function makeTimestamp(ms: number) {
@@ -127,24 +122,5 @@ describe("feedbackService", () => {
     expect(items).toEqual([
       { id: "1", userName: "A", message: "hi", createdAtMs: 1 },
     ]);
-  });
-
-  it("listens public feedbacks with query limit", () => {
-    const onData = jest.fn();
-    const onError = jest.fn();
-    mockOnSnapshot.mockImplementationOnce(
-      (_queryRef: unknown, onNext: (snap: unknown) => void) => {
-        onNext({
-          docs: [{ id: "pub1", data: () => ({ userId: "u2", message: "hello" }) }],
-        });
-        return () => undefined;
-      },
-    );
-
-    listenPublicFeedbacks(onData, onError);
-
-    expect(mockOrderBy).toHaveBeenCalledWith("createdAt", "desc");
-    expect(mockLimit).toHaveBeenCalledWith(30);
-    expect(onData).toHaveBeenCalledWith([expect.objectContaining({ id: "pub1" })]);
   });
 });

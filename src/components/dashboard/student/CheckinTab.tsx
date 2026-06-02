@@ -30,6 +30,7 @@ export interface CheckinTabProps {
   } | null;
   plan: Plan | null;
   paymentOverdue: boolean;
+  accountInactive?: boolean;
   classes: GymClass[];
   selectedClassId: string;
   onSelectedClassIdChange: (classId: string) => void;
@@ -51,6 +52,7 @@ export function CheckinTab({
   currentWeekInfo,
   plan,
   paymentOverdue,
+  accountInactive = false,
   classes,
   selectedClassId,
   onSelectedClassIdChange,
@@ -96,6 +98,18 @@ export function CheckinTab({
 
         <div className="dashboard-card dashboard-card-accent relative min-w-0 overflow-hidden p-5 sm:rounded-[40px] sm:p-8 group">
           <div className="absolute inset-0 bg-gradient-to-b from-amber-500/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+
+          {!currentWeekInfo && !plan ? (
+            <div
+              className="relative z-10 px-4 py-8 text-center sm:px-8 sm:py-12"
+              data-testid="student-checkin-no-plan"
+            >
+              <p className="text-sm text-zinc-400">
+                Seu perfil não possui um plano associado. Fale com seu professor
+                para ativar seu plano e liberar o check-in.
+              </p>
+            </div>
+          ) : null}
 
           {currentWeekInfo && (
             <div className="relative z-10 min-w-0 space-y-5 sm:space-y-6">
@@ -263,6 +277,8 @@ export function CheckinTab({
                   "Check-in já realizado"
                 ) : !plan.active ? (
                   "Plano inativo"
+                ) : accountInactive ? (
+                  "Conta desativada"
                 ) : paymentOverdue ? (
                   "Mensalidade pendente"
                 ) : !selectedClassWindowOpen ? (
@@ -295,7 +311,9 @@ export function CheckinTab({
 
               {!canCheckIn && checkInStatus === "idle" && (
                 <p className="rounded-full border border-red-500/10 bg-red-500/5 py-2 text-xs font-medium text-red-400/80">
-                  {paymentOverdue
+                  {accountInactive
+                    ? "Sua conta está desativada. Procure a recepção para reativar o acesso."
+                    : paymentOverdue
                     ? "Mensalidade pendente. Procure seu professor para regularizar."
                     : !plan
                       ? "Seu perfil não possui um plano associado."

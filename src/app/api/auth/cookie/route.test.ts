@@ -9,9 +9,9 @@ const mockCookies = jest.fn(async () => ({
 
 const mockVerifyToken = jest.fn();
 const mockGetClientIdentifier = jest.fn(async () => "127.0.0.1");
-const mockCheckRateLimitMemory = jest.fn((...args: any[]) => {
+const mockCheckRateLimit = jest.fn(async (...args: unknown[]) => {
   void args;
-  return { allowed: true };
+  return { allowed: true, remaining: 29, retryAfterMs: 0 };
 });
 
 jest.mock("next/headers", () => ({
@@ -26,19 +26,23 @@ jest.mock("@/lib/auth/clientIdentifier", () => ({
   getClientIdentifier: () => mockGetClientIdentifier(),
 }));
 
-jest.mock("@/lib/auth/rateLimitMemory", () => ({
-  checkRateLimitMemory: (...args: any[]) => mockCheckRateLimitMemory(...args),
+jest.mock("@/lib/auth/rateLimit", () => ({
+  checkRateLimit: (...args: unknown[]) => mockCheckRateLimit(...args),
 }));
 
 jest.mock("@/lib/security/origin", () => ({
   isTrustedMutationRequest: () => true,
 }));
 
+jest.mock("@/lib/auth/verifyTokenOptions", () => ({
+  getVerifyTokenOptions: () => ({ checkRevoked: false }),
+}));
+
 describe("POST /api/auth/cookie", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockVerifyToken.mockResolvedValue({ uid: "user-1" });
-    mockCheckRateLimitMemory.mockReturnValue({ allowed: true });
+    mockCheckRateLimit.mockResolvedValue({ allowed: true, remaining: 29, retryAfterMs: 0 });
   });
 
   it("returns 200 and sets cookie for valid token", async () => {
@@ -52,7 +56,9 @@ describe("POST /api/auth/cookie", () => {
     const response = await POST(request);
 
     expect(response.status).toBe(200);
-    expect(mockVerifyToken).toHaveBeenCalledWith("valid-token");
+    expect(mockVerifyToken).toHaveBeenCalledWith("valid-token", {
+      checkRevoked: false,
+    });
     expect(mockCookieSet).toHaveBeenCalledTimes(1);
   });
 
@@ -87,7 +93,7 @@ describe("POST /api/auth/cookie", () => {
   });
 
   it("returns 429 when global rate limit blocks request", async () => {
-    mockCheckRateLimitMemory.mockReturnValueOnce({ allowed: false });
+    mockCheckRateLimit.mockResolvedValueOnce({ allowed: false, remaining: 0, retryAfterMs: 60_000 });
     const { POST } = await import("./route");
     const request = new Request("http://localhost/api/auth/cookie", {
       method: "POST",
@@ -103,9 +109,9 @@ describe("POST /api/auth/cookie", () => {
   });
 
   it("returns 429 when uid rate limit blocks request", async () => {
-    mockCheckRateLimitMemory
-      .mockReturnValueOnce({ allowed: true })
-      .mockReturnValueOnce({ allowed: false });
+    mockCheckRateLimit
+      .mockResolvedValueOnce({ allowed: true, remaining: 29, retryAfterMs: 0 })
+      .mockResolvedValueOnce({ allowed: false, remaining: 0, retryAfterMs: 60_000 });
     const { POST } = await import("./route");
     const request = new Request("http://localhost/api/auth/cookie", {
       method: "POST",
@@ -116,7 +122,9 @@ describe("POST /api/auth/cookie", () => {
     const response = await POST(request);
 
     expect(response.status).toBe(429);
-    expect(mockVerifyToken).toHaveBeenCalledWith("valid-token");
+    expect(mockVerifyToken).toHaveBeenCalledWith("valid-token", {
+      checkRevoked: false,
+    });
     expect(mockCookieSet).not.toHaveBeenCalled();
   });
 });

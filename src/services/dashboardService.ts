@@ -79,6 +79,33 @@ export function listenCoaches(
   );
 }
 
+const COACH_COUNTS_POLL_MS = 120_000;
+
+/** Coach dashboard: 30-day check-in counts via private API (no client listener on all checkins). */
+export async function fetchCheckinCountsByCoach(
+  days = 30,
+): Promise<Map<string, number>> {
+  const response = await fetch(
+    `/api/private/checkins/counts?days=${encodeURIComponent(String(days))}`,
+    { credentials: "include" },
+  );
+  if (!response.ok) {
+    throw new Error("Failed to load check-in counts");
+  }
+  const body = (await response.json()) as { counts?: Record<string, number> };
+  const map = new Map<string, number>();
+  if (body.counts) {
+    for (const [userId, count] of Object.entries(body.counts)) {
+      map.set(userId, count);
+    }
+  }
+  return map;
+}
+
+export function getCoachCheckinCountsPollIntervalMs(): number {
+  return COACH_COUNTS_POLL_MS;
+}
+
 export function listenCheckinCountsSince(
   since: Date,
   onData: (counts: Map<string, number>) => void,

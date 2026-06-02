@@ -26,6 +26,7 @@
 # misc
 .DS_Store
 *.pem
+*.zip
 
 # debug
 npm-debug.log*
@@ -49,8 +50,10 @@ next-env.d.ts
 
 service-key.json
 tertoct-prod.json
+*-prod.json
+*.serviceAccount.json
 
 
 .ai*
-
 .cursor
+*.log

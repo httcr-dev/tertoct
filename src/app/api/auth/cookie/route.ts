@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { AUTH_COOKIE_NAME, getAuthCookieOptions } from "@/lib/auth/cookies";
 import { getClientIdentifier } from "@/lib/auth/clientIdentifier";
-import { checkRateLimitMemory } from "@/lib/auth/rateLimitMemory";
+import { checkRateLimit } from "@/lib/auth/rateLimit";
 import { verifyToken } from "@/lib/auth/verifyToken";
+import { getVerifyTokenOptions } from "@/lib/auth/verifyTokenOptions";
 import { buildAuthRateLimitKey } from "@/lib/auth/rateLimitKey";
 import {
   getMutationOriginDetails,
@@ -15,9 +16,6 @@ import {
   trackStatusAnomaly,
 } from "@/lib/observability/serverObservability";
 
-// In-memory rate limits — no Firestore round-trips, sub-millisecond checks.
-// Real security gate for POST is token verification (server-side JWT check),
-// not the rate counter. The counter just prevents trivial DoS.
 const isE2eOrEmulator =
   process.env.NEXT_PUBLIC_E2E === "true" ||
   !!process.env.FIRESTORE_EMULATOR_HOST;
@@ -33,6 +31,9 @@ const DELETE_LIMIT = {
   // means a user can get stuck in a signed-in-but-blocked state.
   maxRequests: isE2eOrEmulator ? 10_000 : 100,
 } as const;
+
+/** Avoid blocking login when Firestore rate-limit storage is temporarily unavailable. */
+const COOKIE_RATE_LIMIT_OPTS = { failOpen: true } as const;
 
 function logOriginMismatch(req: Request, action: string): void {
   logServerEvent("warn", {
@@ -53,13 +54,13 @@ export async function POST(req: Request) {
   }
   const ip = await getClientIdentifier();
   try {
-    const limit = checkRateLimitMemory(
+    const limit = await checkRateLimit(
       buildAuthRateLimitKey({
         route: "auth-cookie",
         method: "POST",
         clientId: ip,
       }),
-      POST_LIMIT,
+      { ...POST_LIMIT, ...COOKIE_RATE_LIMIT_OPTS },
     );
 
     if (!limit.allowed) {
@@ -96,7 +97,10 @@ export async function POST(req: Request) {
 
     let decodedUid: string | null = null;
     try {
-      const decoded = await verifyToken(payload.token);
+      const decoded = await verifyToken(
+        payload.token,
+        getVerifyTokenOptions(),
+      );
       decodedUid = decoded.uid;
     } catch (error) {
       trackStatusAnomaly("/api/auth/cookie", 401);
@@ -113,14 +117,14 @@ export async function POST(req: Request) {
     }
 
     if (decodedUid) {
-      const uidLimit = checkRateLimitMemory(
+      const uidLimit = await checkRateLimit(
         buildAuthRateLimitKey({
           route: "auth-cookie",
           method: "POST",
           clientId: ip,
           uid: decodedUid,
         }),
-        POST_LIMIT,
+        { ...POST_LIMIT, ...COOKIE_RATE_LIMIT_OPTS },
       );
       if (!uidLimit.allowed) {
         logServerEvent("warn", {
@@ -179,13 +183,13 @@ export async function DELETE(req: Request) {
       );
     }
     const ip = await getClientIdentifier();
-    const limit = checkRateLimitMemory(
+    const limit = await checkRateLimit(
       buildAuthRateLimitKey({
         route: "auth-cookie",
         method: "DELETE",
         clientId: ip,
       }),
-      DELETE_LIMIT,
+      { ...DELETE_LIMIT, ...COOKIE_RATE_LIMIT_OPTS },
     );
 
     if (!limit.allowed) {

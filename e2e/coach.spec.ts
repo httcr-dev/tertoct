@@ -12,14 +12,15 @@ test.describe("coach autenticado", () => {
   });
 
   test("lista alunos com o aluno E2E", async ({ page }) => {
-    await page.goto("/dashboard");
-    await expect(page.getByRole("heading", { name: "Visão Geral" })).toBeVisible({
+    await page.goto("/dashboard?tab=students");
+    await expect(page.locator("header h1")).toHaveText("Alunos", {
       timeout: 30_000,
     });
-    await coachSidebar(page).getByTestId("coach-tab-students").click();
-    await expect(page.locator("header h1")).toHaveText("Alunos");
     await expect(
-      page.getByRole("row").filter({ hasText: E2E_LABELS.studentName }),
+      page.getByRole("heading", { name: "Gestão de Alunos" }),
+    ).toBeVisible();
+    await expect(
+      page.locator("table tbody").getByText(E2E_LABELS.studentName),
     ).toBeVisible();
   });
 
