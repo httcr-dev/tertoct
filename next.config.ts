@@ -39,6 +39,35 @@ const nextConfig: NextConfig = {
   ],
   images: {
     qualities: [100, 75],
+    remotePatterns: [
+      // Google profile photos (Sign in with Google)
+      {
+        protocol: "https",
+        hostname: "lh3.googleusercontent.com",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "lh4.googleusercontent.com",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "lh5.googleusercontent.com",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "lh6.googleusercontent.com",
+        pathname: "/**",
+      },
+      // Firebase Storage (optional user uploads)
+      {
+        protocol: "https",
+        hostname: "firebasestorage.googleapis.com",
+        pathname: "/**",
+      },
+    ],
   },
   async headers() {
     return [

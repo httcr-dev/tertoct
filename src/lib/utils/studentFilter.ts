@@ -1,4 +1,5 @@
 import type { StudentSummary } from "@/lib/types";
+import { isPaymentOverdue } from "@/lib/utils/payment";
 
 export interface FilterParams {
   selectedPlanId: string;
@@ -26,14 +27,23 @@ export function filterStudents(
       if (paymentFilter === "none") return !hasDueDay;
       if (!hasDueDay) return false;
 
-      let isPaid = false;
-      if (s.paymentValidUntil) {
-        isPaid = now.getTime() <= s.paymentValidUntil.toDate().getTime();
-      } else {
-        isPaid = !!s.monthlyPaymentPaid || now.getDate() <= s.paymentDueDay!;
-      }
+      const overdue = isPaymentOverdue(
+        {
+          id: s.id,
+          name: s.name,
+          email: s.email,
+          role: "student",
+          active: s.active ?? true,
+          planId: s.planId,
+          paymentDueDay: s.paymentDueDay,
+          monthlyPaymentPaid: s.monthlyPaymentPaid,
+          paymentValidUntil: s.paymentValidUntil,
+        },
+        now,
+      );
+      const isPaid = !overdue;
 
-      if (paymentFilter === "pending") return !isPaid;
+      if (paymentFilter === "pending") return overdue;
 
       if (isPaid) {
         if (!s.paymentValidUntil) return paymentFilter === "active";

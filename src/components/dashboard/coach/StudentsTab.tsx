@@ -1,8 +1,9 @@
 "use client";
 
 import Image from "next/image";
+import { History, Users } from "lucide-react";
 import { StudentSummary, Plan } from "@/lib/types";
-import { Users } from "lucide-react";
+import { isUnpaidPastDue } from "@/lib/utils/payment";
 
 interface StudentsTabProps {
   filteredStudents: StudentSummary[];
@@ -17,6 +18,283 @@ interface StudentsTabProps {
   handleTogglePayment: (student: StudentSummary) => Promise<void>;
 }
 
+interface StudentPaymentInfo {
+  situation: string;
+  situationClass: string;
+  actionLabel: string;
+  actionTitle: string;
+  actionClass: string;
+}
+
+function formatPaymentDate(date: Date): string {
+  return `${date.getDate().toString().padStart(2, "0")}/${(date.getMonth() + 1).toString().padStart(2, "0")}`;
+}
+
+function getNextValidUntilDate(dueDay: number): Date {
+  const now = new Date();
+  let targetMonth = now.getMonth() + 1;
+  let targetYear = now.getFullYear();
+  if (targetMonth > 11) {
+    targetMonth = 0;
+    targetYear += 1;
+  }
+  const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
+  const day = Math.min(dueDay, lastDay);
+  return new Date(targetYear, targetMonth, day, 23, 59, 59, 999);
+}
+
+function isMarkedPaid(student: StudentSummary): boolean {
+  if (student.paymentValidUntil) {
+    return new Date().getTime() <= student.paymentValidUntil.toDate().getTime();
+  }
+  return student.monthlyPaymentPaid === true;
+}
+
+function getStudentPaymentInfo(student: StudentSummary): StudentPaymentInfo {
+  if (student.paymentDueDay == null) {
+    return {
+      situation: "Sem vencimento",
+      situationClass: "text-zinc-400",
+      actionLabel: "—",
+      actionTitle: "Defina o dia de vencimento",
+      actionClass: "",
+    };
+  }
+
+  const now = new Date();
+  const markedPaid = isMarkedPaid(student);
+  const nextUntil = formatPaymentDate(getNextValidUntilDate(student.paymentDueDay));
+  const overdue = isUnpaidPastDue(student.paymentDueDay, now);
+  const dueLabel = `dia ${student.paymentDueDay}`;
+
+  if (markedPaid) {
+    const validUntil = student.paymentValidUntil?.toDate();
+    const paidUntil = validUntil ? formatPaymentDate(validUntil) : null;
+    return {
+      situation: paidUntil ? `Pago até ${paidUntil}` : "Pago",
+      situationClass: "text-emerald-400",
+      actionLabel: "Desfazer pagamento",
+      actionTitle: overdue
+        ? "Remove confirmação · volta a atrasado"
+        : "Remove confirmação · volta a no prazo",
+      actionClass:
+        "border-zinc-600/50 bg-zinc-800/60 text-zinc-200 hover:bg-zinc-800",
+    };
+  }
+
+  if (overdue) {
+    return {
+      situation: `Atrasado · ${dueLabel}`,
+      situationClass: "text-red-400",
+      actionLabel: "Confirmar pagamento",
+      actionTitle: `Registra pagamento até ${nextUntil} e libera check-in`,
+      actionClass:
+        "border-emerald-500/35 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20",
+    };
+  }
+
+  return {
+    situation: `No prazo · ${dueLabel}`,
+    situationClass: "text-amber-400",
+    actionLabel: "Confirmar pagamento",
+    actionTitle: `Registra pagamento válido até ${nextUntil}`,
+    actionClass:
+      "border-emerald-500/35 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20",
+  };
+}
+
+const thClass =
+  "px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-zinc-500 whitespace-nowrap";
+const tdClass = "px-3 py-2.5 align-middle text-xs text-zinc-300";
+const selectClass =
+  "dashboard-input w-full min-w-0 cursor-pointer px-2 py-1.5 text-xs";
+const fieldLabelClass =
+  "text-[10px] font-semibold uppercase tracking-wider text-zinc-500";
+
+function StudentAvatar({ student }: { student: StudentSummary }) {
+  return (
+    <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-zinc-700/50 bg-zinc-800 text-[11px] font-bold text-zinc-300 md:h-8 md:w-8 md:rounded-md">
+      {student.photoURL ? (
+        <Image
+          src={student.photoURL}
+          alt=""
+          width={36}
+          height={36}
+          className="h-full w-full object-cover"
+          referrerPolicy="no-referrer"
+          unoptimized
+        />
+      ) : (
+        (student.name?.charAt(0) ?? "U").toUpperCase()
+      )}
+    </div>
+  );
+}
+
+function StudentRowControls({
+  student,
+  plans,
+  paymentInfo,
+  handleAssignPlan,
+  handleSetPaymentDay,
+  handleTogglePayment,
+  layout,
+}: {
+  student: StudentSummary;
+  plans: Plan[];
+  paymentInfo: StudentPaymentInfo;
+  handleAssignPlan: (studentId: string, planId: string | null) => Promise<void>;
+  handleSetPaymentDay: (studentId: string, day: number | null) => Promise<void>;
+  handleTogglePayment: (student: StudentSummary) => Promise<void>;
+  layout: "table" | "card";
+}) {
+  if (layout === "table") {
+    return (
+      <>
+        <td className={tdClass}>
+          <select
+            aria-label={`Plano de ${student.name ?? "aluno"}`}
+            className={selectClass}
+            value={student.planId ?? ""}
+            onChange={(e) =>
+              handleAssignPlan(student.id, e.target.value || null)
+            }
+          >
+            <option value="">Nenhum</option>
+            {plans.map((plan) => (
+              <option key={plan.id} value={plan.id}>
+                {plan.name}
+              </option>
+            ))}
+          </select>
+        </td>
+        <td className={tdClass}>
+          <select
+            aria-label={`Vencimento de ${student.name ?? "aluno"}`}
+            className={selectClass}
+            value={student.paymentDueDay ?? ""}
+            onChange={(e) => {
+              const val = e.target.value;
+              handleSetPaymentDay(student.id, val ? Number(val) : null);
+            }}
+          >
+            <option value="">—</option>
+            {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+        </td>
+        <td className={tdClass}>
+          <span
+            className={`block truncate font-medium ${paymentInfo.situationClass}`}
+            title={paymentInfo.situation}
+          >
+            {paymentInfo.situation}
+          </span>
+        </td>
+        <td className={tdClass}>
+          {student.paymentDueDay != null ? (
+            <button
+              type="button"
+              title={paymentInfo.actionTitle}
+              onClick={() => handleTogglePayment(student)}
+              className={`w-full cursor-pointer truncate rounded-md border px-2 py-1.5 text-[11px] font-semibold transition-all active:scale-[0.98] ${paymentInfo.actionClass}`}
+            >
+              {paymentInfo.actionLabel}
+            </button>
+          ) : (
+            <span className="text-zinc-600">—</span>
+          )}
+        </td>
+      </>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-2 gap-x-3 gap-y-3 border-t border-zinc-800/50 px-3 py-3">
+      <div className="min-w-0 space-y-1">
+        <span className={fieldLabelClass}>Plano</span>
+        <select
+          aria-label={`Plano de ${student.name ?? "aluno"}`}
+          className={`${selectClass} py-2`}
+          value={student.planId ?? ""}
+          onChange={(e) => handleAssignPlan(student.id, e.target.value || null)}
+        >
+          <option value="">Nenhum</option>
+          {plans.map((plan) => (
+            <option key={plan.id} value={plan.id}>
+              {plan.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="min-w-0 space-y-1">
+        <span className={fieldLabelClass}>Vencimento</span>
+        <select
+          aria-label={`Vencimento de ${student.name ?? "aluno"}`}
+          className={`${selectClass} py-2`}
+          value={student.paymentDueDay ?? ""}
+          onChange={(e) => {
+            const val = e.target.value;
+            handleSetPaymentDay(student.id, val ? Number(val) : null);
+          }}
+        >
+          <option value="">Dia —</option>
+          {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+            <option key={d} value={d}>
+              Dia {d}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="col-span-2 min-w-0 space-y-1">
+        <span className={fieldLabelClass}>Situação</span>
+        <p className={`text-sm font-medium leading-snug ${paymentInfo.situationClass}`}>
+          {paymentInfo.situation}
+        </p>
+      </div>
+      {student.paymentDueDay != null && (
+        <div className="col-span-2">
+          <button
+            type="button"
+            title={paymentInfo.actionTitle}
+            onClick={() => handleTogglePayment(student)}
+            className={`w-full cursor-pointer rounded-lg border px-3 py-2.5 text-xs font-semibold transition-all active:scale-[0.98] ${paymentInfo.actionClass}`}
+          >
+            {paymentInfo.actionLabel}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EmptyState({
+  onClearFilters,
+}: {
+  onClearFilters: () => void;
+}) {
+  return (
+    <div className="py-12 text-center">
+      <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-800/50 text-zinc-500">
+        <Users className="h-5 w-5" />
+      </div>
+      <p className="text-sm text-zinc-400">
+        Nenhum aluno encontrado para estes filtros.
+      </p>
+      <button
+        type="button"
+        onClick={onClearFilters}
+        className="mt-3 text-xs font-semibold text-amber-500 hover:text-amber-400"
+      >
+        Limpar filtros
+      </button>
+    </div>
+  );
+}
+
 export function StudentsTab({
   filteredStudents,
   selectedPlanId,
@@ -29,224 +307,171 @@ export function StudentsTab({
   handleSetPaymentDay,
   handleTogglePayment,
 }: StudentsTabProps) {
+  const clearFilters = () => {
+    setSelectedPlanId("all");
+    setPaymentFilter("all");
+  };
+
+  const controlProps = {
+    plans,
+    handleAssignPlan,
+    handleSetPaymentDay,
+    handleTogglePayment,
+  };
+
   return (
-    <section className="space-y-6">
-      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
-        <div>
-          <h2 className="text-xl font-bold text-zinc-50 tracking-tight">Gestão de Alunos</h2>
-          <p className="text-sm text-zinc-400 mt-1">
-            Controle de planos, vencimentos e status de pagamento.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Filtrar Plano</span>
-            <select
-              className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-2 text-sm text-zinc-200 transition-all focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 focus:outline-none min-w-[180px]"
-              value={selectedPlanId}
-              onChange={(e) => setSelectedPlanId(e.target.value)}
-            >
-              <option value="all">Todos os Planos</option>
-              <option value="none">Sem Plano</option>
-              {plans.map((plan) => (
-                <option key={plan.id} value={plan.id}>
-                  {plan.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Status Pagamento</span>
-            <select
-              className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-2 text-sm text-zinc-200 transition-all focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 focus:outline-none min-w-[150px]"
-              value={paymentFilter}
-              onChange={(e) => setPaymentFilter(e.target.value)}
-            >
-              <option value="all">Todos os Status</option>
-              <option value="paid">Pagos (Mês Seguinte)</option>
-              <option value="active">Ativos (Vence este mês)</option>
-              <option value="pending">Pendentes / Atrasados</option>
-              <option value="none">Sem Data Definida</option>
-            </select>
-          </div>
-        </div>
+    <section className="space-y-4 sm:space-y-5">
+      <div>
+        <h2 className="text-lg font-bold tracking-tight text-zinc-50 sm:text-xl">
+          Gestão de Alunos
+        </h2>
+        <p className="mt-1 text-sm text-zinc-400">
+          Planos, vencimentos e pagamentos. No celular, use os cards abaixo.
+        </p>
       </div>
 
-      <div className="grid gap-4">
-        {filteredStudents.map((student) => {
-          const currentPlan = student.planId
-            ? plans.find((p) => p.id === student.planId)
-            : null;
+      <div className="dashboard-card grid grid-cols-1 gap-3 p-3 sm:grid-cols-2 sm:p-4 lg:flex lg:flex-wrap lg:items-end lg:gap-4">
+        <div className="min-w-0 space-y-1.5 lg:min-w-[160px]">
+          <span className={fieldLabelClass}>Filtrar plano</span>
+          <select
+            className="dashboard-input w-full cursor-pointer px-3 py-2.5 text-sm"
+            value={selectedPlanId}
+            onChange={(e) => setSelectedPlanId(e.target.value)}
+          >
+            <option value="all">Todos</option>
+            <option value="none">Sem plano</option>
+            {plans.map((plan) => (
+              <option key={plan.id} value={plan.id}>
+                {plan.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="min-w-0 space-y-1.5 lg:min-w-[160px]">
+          <span className={fieldLabelClass}>Filtrar pagamento</span>
+          <select
+            className="dashboard-input w-full cursor-pointer px-3 py-2.5 text-sm"
+            value={paymentFilter}
+            onChange={(e) => setPaymentFilter(e.target.value)}
+          >
+            <option value="all">Todos</option>
+            <option value="paid">Pagos (próx. mês)</option>
+            <option value="active">Vence este mês</option>
+            <option value="pending">Pendentes</option>
+            <option value="none">Sem data</option>
+          </select>
+        </div>
+        <p className="text-xs text-zinc-500 sm:col-span-2 lg:ml-auto lg:self-end">
+          {filteredStudents.length}{" "}
+          {filteredStudents.length === 1 ? "aluno" : "alunos"}
+        </p>
+      </div>
 
-          const now = new Date();
-          let isPaid = false;
-          let paymentStatusLabel = "";
-          let statusColorClass = "";
-
-          if (student.paymentDueDay != null) {
-            if (student.paymentValidUntil) {
-              const validUntil = student.paymentValidUntil.toDate();
-              isPaid = now.getTime() <= validUntil.getTime();
-              
-              if (isPaid) {
-                const isNextMonth = validUntil.getMonth() !== now.getMonth() || validUntil.getFullYear() !== now.getFullYear();
-                paymentStatusLabel = isNextMonth 
-                  ? `Pago até ${validUntil.getDate().toString().padStart(2, '0')}/${(validUntil.getMonth() + 1).toString().padStart(2, '0')}`
-                  : `Ativo até ${validUntil.getDate().toString().padStart(2, '0')}/${(validUntil.getMonth() + 1).toString().padStart(2, '0')}`;
-                statusColorClass = isNextMonth ? "text-emerald-400" : "text-amber-400";
-              } else {
-                paymentStatusLabel = `Vencido em ${validUntil.getDate().toString().padStart(2, '0')}/${(validUntil.getMonth() + 1).toString().padStart(2, '0')}`;
-                statusColorClass = "text-red-400";
-              }
-            } else {
-              if (student.monthlyPaymentPaid) {
-                isPaid = true;
-                paymentStatusLabel = "Pago";
-                statusColorClass = "text-emerald-400";
-              } else {
-                isPaid = now.getDate() <= student.paymentDueDay;
-                paymentStatusLabel = isPaid ? "No Prazo" : "Pendente";
-                statusColorClass = isPaid ? "text-amber-400" : "text-red-400";
-              }
-            }
-          } else {
-            paymentStatusLabel = "Sem Vencimento";
-            statusColorClass = "text-zinc-500";
-          }
-
-          return (
-            <div
-              key={student.id}
-              className="group relative overflow-hidden rounded-2xl border border-zinc-800/60 bg-zinc-900/40 transition-all hover:border-zinc-700/80 hover:bg-zinc-900/60"
-            >
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between p-5 gap-6">
-                
-                {/* Info Section */}
-                <div 
-                  className="flex items-center gap-4 flex-1 min-w-0 cursor-pointer"
-                  onClick={() => viewCheckins(student)}
-                >
-                  <div className="relative shrink-0">
-                    <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl border border-zinc-700/50 bg-zinc-800 font-bold text-zinc-300 shadow-inner">
-                      {student.photoURL ? (
-                        <Image
-                          src={student.photoURL}
-                          alt={student.name || ""}
-                          width={48}
-                          height={48}
-                          className="block h-full w-full object-cover transition-transform group-hover:scale-110"
-                          referrerPolicy="no-referrer"
-                          unoptimized
-                        />
-                      ) : student.name ? (
-                        student.name.charAt(0).toUpperCase()
-                      ) : (
-                        "U"
-                      )}
-                    </div>
-                    <div className={`absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-zinc-900 ${isPaid ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="truncate text-base font-bold text-zinc-100 group-hover:text-amber-400 transition-colors">
-                      {student.name ?? "Aluno sem nome"}
-                    </h3>
-                    <p className="truncate text-xs text-zinc-500 font-medium">
-                      {student.email ?? "sem e-mail"}
+      {/* Mobile: cards */}
+      <div className="space-y-3 md:hidden">
+        {filteredStudents.length === 0 ? (
+          <div className="dashboard-card">
+            <EmptyState onClearFilters={clearFilters} />
+          </div>
+        ) : (
+          filteredStudents.map((student) => {
+            const paymentInfo = getStudentPaymentInfo(student);
+            return (
+              <article key={student.id} className="dashboard-card overflow-hidden">
+                <div className="flex items-center gap-3 p-3">
+                  <StudentAvatar student={student} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold text-zinc-100">
+                      {student.name ?? "Sem nome"}
                     </p>
-                    <div className="flex items-center gap-2 mt-1.5">
-                      <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider ${currentPlan ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-zinc-800 text-zinc-500'}`}>
-                        {currentPlan ? currentPlan.name : "Sem plano"}
-                      </span>
-                      <span className="text-[10px] text-zinc-500 bg-zinc-800/50 px-2 py-0.5 rounded-md border border-zinc-700/30">
-                        {student.weeklyCheckIns} check-ins (30d)
-                      </span>
-                    </div>
+                    <p className="mt-0.5 text-xs text-zinc-500">
+                      {student.weeklyCheckIns} check-ins (30 dias)
+                    </p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => viewCheckins(student)}
+                    className="flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border border-zinc-700/50 bg-zinc-800/50 px-2.5 py-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-400 transition-colors hover:border-zinc-600 hover:text-zinc-200"
+                  >
+                    <History className="h-3.5 w-3.5" />
+                    Histórico
+                  </button>
                 </div>
+                <StudentRowControls
+                  student={student}
+                  paymentInfo={paymentInfo}
+                  layout="card"
+                  {...controlProps}
+                />
+              </article>
+            );
+          })
+        )}
+      </div>
 
-                {/* Controls Section */}
-                <div className="flex flex-wrap items-center gap-4 sm:gap-8 pt-4 lg:pt-0 border-t lg:border-t-0 border-zinc-800/50">
-                  
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[9px] font-black uppercase text-zinc-600 tracking-[0.15em] ml-0.5">Atribuir Plano</label>
-                    <select
-                      className="rounded-xl border border-zinc-800 bg-black/40 px-3 py-2 text-xs text-zinc-300 focus:border-amber-500/50 focus:outline-none transition-all hover:bg-black/60 cursor-pointer min-w-[130px]"
-                      value={student.planId ?? ""}
-                      onChange={(e) =>
-                        handleAssignPlan(student.id, e.target.value || null)
-                      }
-                    >
-                      <option value="">Nenhum</option>
-                      {plans.map((plan) => (
-                        <option key={plan.id} value={plan.id}>
-                          {plan.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[9px] font-black uppercase text-zinc-600 tracking-[0.15em] ml-0.5">Vencimento</label>
-                    <select
-                      className="rounded-xl border border-zinc-800 bg-black/40 px-3 py-2 text-xs text-zinc-300 focus:border-amber-500/50 focus:outline-none transition-all hover:bg-black/60 cursor-pointer"
-                      value={student.paymentDueDay ?? ""}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        handleSetPaymentDay(student.id, val ? Number(val) : null);
-                      }}
-                    >
-                      <option value="">Nenhum</option>
-                      {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
-                        <option key={d} value={d}>
-                          Dia {d}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="flex flex-col gap-1.5 items-center lg:items-end">
-                    <label className="text-[9px] font-black uppercase text-zinc-600 tracking-[0.15em] mr-0.5">Status Pgto</label>
-                    {student.paymentDueDay != null ? (
-                      <div className="flex flex-col items-center lg:items-end gap-1">
-                        <button
-                          onClick={() => handleTogglePayment(student)}
-                          className={`flex cursor-pointer items-center gap-1.5 rounded-xl px-4 py-1.5 text-xs font-bold transition-all active:scale-95 ${
-                            isPaid
-                              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20"
-                              : "bg-red-500/10 text-red-100 border border-red-500/30 animate-pulse hover:bg-red-500/20"
-                          }`}
-                        >
-                          {isPaid ? "✓ Pago" : "✕ Pendente"}
-                        </button>
-                        <span className={`text-[10px] font-bold tracking-tight ${statusColorClass}`}>
-                          {paymentStatusLabel}
+      {/* Desktop: table */}
+      <div className="dashboard-card hidden overflow-hidden md:block">
+        <div className="overflow-x-auto">
+          <table className="w-full table-fixed border-collapse">
+            <colgroup>
+              <col className="w-[26%]" />
+              <col className="w-[9%]" />
+              <col className="w-[18%]" />
+              <col className="w-[9%]" />
+              <col className="w-[24%]" />
+              <col className="w-[14%]" />
+            </colgroup>
+            <thead>
+              <tr className="border-b border-zinc-800/60 bg-zinc-950/40">
+                <th className={thClass}>Aluno</th>
+                <th className={thClass}>Check-ins</th>
+                <th className={thClass}>Plano</th>
+                <th className={thClass}>Venc.</th>
+                <th className={thClass}>Situação</th>
+                <th className={thClass}>Ação</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-800/50">
+              {filteredStudents.map((student) => {
+                const paymentInfo = getStudentPaymentInfo(student);
+                return (
+                  <tr
+                    key={student.id}
+                    className="h-14 transition-colors hover:bg-zinc-800/20"
+                  >
+                    <td className={tdClass}>
+                      <button
+                        type="button"
+                        onClick={() => viewCheckins(student)}
+                        title="Ver histórico de check-ins"
+                        className="flex w-full min-w-0 cursor-pointer items-center gap-2 text-left"
+                      >
+                        <StudentAvatar student={student} />
+                        <span className="min-w-0 truncate font-medium text-zinc-100">
+                          {student.name ?? "Sem nome"}
                         </span>
-                      </div>
-                    ) : (
-                      <span className="text-[10px] italic text-zinc-600 h-[38px] flex items-center">
-                        Sem Controle
-                      </span>
-                    )}
-                  </div>
-
-                </div>
-              </div>
-            </div>
-          );
-        })}
-
+                        <History className="ml-auto h-3.5 w-3.5 shrink-0 text-zinc-600" />
+                      </button>
+                    </td>
+                    <td className={`${tdClass} tabular-nums text-zinc-400`}>
+                      {student.weeklyCheckIns}
+                      <span className="ml-0.5 text-[10px] text-zinc-600">/30d</span>
+                    </td>
+                    <StudentRowControls
+                      student={student}
+                      paymentInfo={paymentInfo}
+                      layout="table"
+                      {...controlProps}
+                    />
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
         {filteredStudents.length === 0 && (
-          <div className="rounded-2xl border-2 border-dashed border-zinc-800/50 py-16 text-center bg-zinc-900/20 backdrop-blur-sm">
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-800/50 text-zinc-500 mb-4">
-              <Users className="h-6 w-6" />
-            </div>
-            <p className="text-zinc-400 font-medium">Nenhum aluno encontrado para estes filtros.</p>
-            <button 
-              onClick={() => { setSelectedPlanId('all'); setPaymentFilter('all'); }}
-              className="mt-4 text-xs font-bold text-amber-500 hover:text-amber-400 underline underline-offset-4"
-            >
-              Limpar Filtros
-            </button>
+          <div className="border-t border-zinc-800/50">
+            <EmptyState onClearFilters={clearFilters} />
           </div>
         )}
       </div>

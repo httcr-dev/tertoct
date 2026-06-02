@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -9,6 +8,11 @@ import type { Plan } from "@/lib/types";
 import { PlansSection } from "@/components/landing/PlansSection";
 import { CoachesSection } from "@/components/landing/CoachesSection";
 import { FeedbackWall } from "@/components/landing/FeedbackWall";
+import { LandingBackground } from "@/components/landing/LandingBackground";
+import { LandingHeader } from "@/components/landing/LandingHeader";
+import { LandingHero } from "@/components/landing/LandingHero";
+import { LandingContact } from "@/components/landing/LandingContact";
+import { LandingDivider } from "@/components/landing/LandingDivider";
 import type { CoachCardData } from "@/services/landingService";
 
 export function HomeClient({
@@ -19,163 +23,40 @@ export function HomeClient({
   initialCoaches: CoachCardData[];
 }) {
   const router = useRouter();
-  const { firebaseUser, loading, authError, signInWithGoogle } = useAuth();
+  const { firebaseUser, authError, signInWithGoogle } = useAuth();
 
   useEffect(() => {
-    if (!loading && firebaseUser) {
+    if (firebaseUser) {
       router.replace("/dashboard");
     }
-  }, [loading, firebaseUser, router]);
+  }, [firebaseUser, router]);
 
   return (
-    <div className="relative min-h-screen bg-black text-zinc-50 overflow-hidden font-sans">
-      {(loading || firebaseUser) && (
-        <PageLoader
-          message={firebaseUser ? "Redirecionando..." : "Carregando..."}
-        />
-      )}
+    <div className="relative min-h-screen overflow-x-hidden bg-black font-sans text-zinc-50">
+      {firebaseUser && <PageLoader message="Redirecionando..." />}
 
-      {!loading && !firebaseUser && (
+      {!firebaseUser && (
         <>
-          <div className="fixed inset-0 z-0">
-            <Image
-              src="/BlessTraining_Boxe_2026-03-15_532.jpg"
-              alt="TertoCT Boxe Background"
-              fill
-              priority
-              quality={100}
-              unoptimized
-              className="object-cover object-center opacity-50 mix-blend-lighten"
-            />
-            <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/20 to-black/95" />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.8)_100%)] pointer-events-none" />
-          </div>
+          <LandingBackground />
 
-          <main className="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col px-4 pb-8 pt-8 lg:px-8">
-            <header className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Image
-                  src="/logo-academy.png"
-                  alt="TertoCT Logo"
-                  width={40}
-                  height={40}
-                  className="object-contain"
-                />
-                <span className="font-bold text-zinc-100 tracking-wide text-2xl">
-                  TertoCT
-                </span>
-              </div>
+          <main className="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col px-3 pb-6 pt-3 sm:px-4 sm:pb-8 sm:pt-4 lg:px-8">
+            <LandingHeader onSignIn={signInWithGoogle} />
 
-              <nav className="hidden items-center gap-8 text-sm font-medium text-zinc-300 md:flex">
-                <a href="#plans" className="transition hover:text-[#c29b62]">
-                  Planos
-                </a>
-                <a href="#coaches" className="transition hover:text-[#c29b62]">
-                  Professores
-                </a>
-                <a href="#contact" className="transition hover:text-[#c29b62]">
-                  Contato
-                </a>
-                <button
-                  onClick={signInWithGoogle}
-                  className="ml-4 cursor-pointer rounded-full bg-[#c29b62] px-6 py-2.5 text-sm font-semibold text-black transition-all hover:bg-[#d4b075] hover:-translate-y-0.5 hover:shadow-[0_0_25px_rgba(194,155,98,0.6)] shadow-[0_0_15px_rgba(194,155,98,0.4)] active:scale-95"
-                >
-                  Entrar com conta Google
-                </button>
-              </nav>
+            <LandingHero onSignIn={signInWithGoogle} authError={authError} />
 
-              <button
-                onClick={signInWithGoogle}
-                className="md:hidden flex cursor-pointer items-center gap-2 rounded-full bg-[#c29b62] px-4 py-2 text-sm font-medium text-black transition-all hover:bg-[#d4b075] hover:-translate-y-0.5 hover:shadow-[0_0_15px_rgba(194,155,98,0.5)] active:scale-95"
-              >
-                <span>Entrar</span>
-              </button>
-            </header>
-            {authError && (
-              <p className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-center text-sm font-medium text-red-100 md:hidden">
-                {authError}
-              </p>
-            )}
+            <LandingDivider className="mb-2 opacity-80 sm:mb-4" />
 
-            <section className="mt-20 flex flex-1 flex-col items-center justify-center text-center space-y-6 lg:mt-28">
-              <h1 className="max-w-4xl text-4xl font-extrabold leading-tight tracking-tight text-zinc-100 sm:text-5xl lg:text-6xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
-                Treino de boxe focado{" "}
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#e6c687] via-[#c29b62] to-[#9c753b]">
-                  em saúde, desempenho!
-                </span>{" "}
-                e disciplina
-              </h1>
-              <p className="max-w-2xl text-base text-zinc-300 sm:text-lg drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] mt-6">
-                Entre em forma de maneira intensa e focada.
-                <br className="hidden sm:block" /> Agende uma aula experimental!
-              </p>
+            <PlansSection plans={initialPlans} loadingLandingData={false} />
 
-              <button
-                type="button"
-                data-testid="landing-login-google"
-                onClick={signInWithGoogle}
-                className="mt-8 flex cursor-pointer items-center gap-3 rounded-full bg-zinc-100 px-8 py-3.5 text-base font-semibold text-zinc-900 shadow-[0_0_20px_rgba(255,255,255,0.1)] transition-all hover:bg-white hover:scale-105 hover:shadow-[0_0_30px_rgba(255,255,255,0.2)] active:scale-95"
-              >
-                <Image
-                  src="/google-logo.svg"
-                  alt="Google"
-                  width={20}
-                  height={20}
-                />
-                <span>Login com Google</span>
-              </button>
-              {authError && (
-                <p className="max-w-md rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-100">
-                  {authError}
-                </p>
-              )}
-            </section>
-
-            <PlansSection
-              plans={initialPlans}
-              loadingLandingData={false}
-            />
+            <LandingDivider className="my-6 opacity-60 sm:my-8" />
 
             <CoachesSection coaches={initialCoaches} />
 
+            <LandingDivider className="my-6 opacity-60 sm:my-8" />
+
             <FeedbackWall />
 
-            <section
-              id="contact"
-              className="mt-32 mb-20 flex flex-col items-center text-center"
-            >
-              <p className="text-sm font-bold uppercase tracking-[0.2em] text-zinc-100 drop-shadow-md">
-                Pronto para transformar suas
-              </p>
-              <h2 className="mt-2 text-3xl font-black text-[#c29b62] sm:text-4xl drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">
-                METAS EM REALIDADE?
-              </h2>
-              <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-                <a
-                  href="https://wa.me/554499771761?text=Ol%C3%A1!%20Gostaria%20de%20agendar%20uma%20aula%20experimental%20de%20boxe."
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="cursor-pointer inline-flex items-center justify-center rounded-full bg-[#c29b62] px-10 py-5 text-sm font-bold uppercase tracking-wider text-black shadow-[0_0_20px_rgba(194,155,98,0.3)] transition-all hover:bg-[#d4b075] hover:-translate-y-1 hover:shadow-[0_0_30px_rgba(194,155,98,0.5)] active:translate-y-0 active:scale-95"
-                >
-                  Agendar Aula Experimental
-                </a>
-
-                <a
-                  href="https://maps.app.goo.gl/search/Avenida+Maua+959+Maringa+PR"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group relative flex items-center justify-center gap-4 overflow-hidden rounded-full bg-zinc-900 border border-zinc-800 px-8 py-4 text-sm font-medium text-zinc-300 shadow-[0_0_20px_rgba(0,0,0,0.5)] transition-all hover:border-[#c29b62]/50 hover:bg-zinc-800 hover:-translate-y-1 hover:shadow-[0_0_30px_rgba(194,155,98,0.15)] active:translate-y-0 active:scale-95"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#c29b62]/10 to-transparent -translate-x-full transition-transform duration-1000 group-hover:translate-x-full" />
-                  <span className="text-2xl group-hover:animate-bounce">📍</span>
-                  <div className="flex flex-col text-left">
-                    <span className="text-[10px] uppercase text-[#c29b62] tracking-[0.2em] font-black">Como Chegar</span>
-                    <span className="font-semibold text-white">Avenida Mauá, 959 — Maringá, PR</span>
-                  </div>
-                  <svg className="w-5 h-5 ml-2 text-zinc-500 transition-colors group-hover:text-[#c29b62]" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                </a>
-              </div>
-            </section>
+            <LandingContact />
           </main>
         </>
       )}

@@ -5,10 +5,22 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import type { ActionStatus } from "./checkinTypes";
 import {
   dateKeyToLocalDate,
-  formatCheckinDateLabel,
   getTodayDateKey,
   isAllowedCheckinDateKey,
+  localDateToDateKey,
 } from "@/lib/utils/checkinDate";
+import { startOfWeek } from "@/lib/utils/date";
+
+const WEEKDAY_HEADERS = ["Seg", "Ter", "Qua", "Qui", "Sex"] as const;
+
+function getWorkWeekDateKeys(anchorDateKey: string): string[] {
+  const monday = startOfWeek(dateKeyToLocalDate(anchorDateKey));
+  return Array.from({ length: 5 }, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    return localDateToDateKey(d);
+  });
+}
 
 export interface CheckinTabProps {
   currentWeekInfo: {
@@ -60,6 +72,13 @@ export function CheckinTab({
   const formattedSelectedDate = dateKeyToLocalDate(selectedDateKey).toLocaleDateString(
     "pt-BR",
   );
+  const weekAnchorKey = allowedDateKeys[0] ?? todayKey;
+  const workWeekDateKeys = getWorkWeekDateKeys(weekAnchorKey);
+  const allowedDateKeySet = new Set(allowedDateKeys);
+  const weekMonthLabel = dateKeyToLocalDate(weekAnchorKey).toLocaleDateString("pt-BR", {
+    month: "long",
+    year: "numeric",
+  });
 
   return (
     <div className="flex min-w-0 flex-col items-center justify-center py-8 sm:py-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -75,7 +94,7 @@ export function CheckinTab({
           </p>
         </div>
 
-        <div className="relative min-w-0 overflow-hidden rounded-[32px] border border-zinc-800 bg-zinc-900/40 p-5 backdrop-blur-xl sm:rounded-[40px] sm:p-8 group">
+        <div className="dashboard-card dashboard-card-accent relative min-w-0 overflow-hidden p-5 sm:rounded-[40px] sm:p-8 group">
           <div className="absolute inset-0 bg-gradient-to-b from-amber-500/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
 
           {currentWeekInfo && (
@@ -91,30 +110,68 @@ export function CheckinTab({
                   </p>
                 ) : (
                   <div
-                    className="grid min-w-0 grid-cols-1 gap-2 min-[400px]:grid-cols-2 sm:grid-cols-3"
+                    className="min-w-0 rounded-xl border border-zinc-800 bg-black/30 p-3 sm:p-4"
                     data-testid="student-checkin-date-options"
                   >
-                    {allowedDateKeys.map((dateKey) => {
-                      const isSelected = dateKey === selectedDateKey;
-                      return (
-                        <button
-                          key={dateKey}
-                          type="button"
-                          data-testid={`student-checkin-date-${dateKey}`}
-                          aria-pressed={isSelected}
-                          onClick={() => onSelectedDateKeyChange(dateKey)}
-                          className={`min-w-0 rounded-xl border px-3 py-3 text-left text-sm transition-colors sm:px-4 ${
-                            isSelected
-                              ? "border-amber-500/50 bg-amber-500/10 text-amber-200"
-                              : "border-zinc-800 bg-black/30 text-zinc-300 hover:border-zinc-700"
-                          }`}
+                    <p className="mb-3 text-center text-xs font-medium capitalize text-zinc-400">
+                      {weekMonthLabel}
+                    </p>
+                    <div
+                      className="grid grid-cols-5 gap-1"
+                      role="row"
+                      aria-hidden
+                    >
+                      {WEEKDAY_HEADERS.map((label) => (
+                        <div
+                          key={label}
+                          className="py-1 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500"
                         >
-                          <span className="block truncate font-medium">
-                            {formatCheckinDateLabel(dateKey, todayKey)}
-                          </span>
-                        </button>
-                      );
-                    })}
+                          {label}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-1 grid grid-cols-5 gap-1" role="group" aria-label="Data do check-in">
+                      {workWeekDateKeys.map((dateKey) => {
+                        const isSelected = dateKey === selectedDateKey;
+                        const isAllowed = allowedDateKeySet.has(dateKey);
+                        const isToday = dateKey === todayKey;
+                        const dayNumber = dateKeyToLocalDate(dateKey).getDate();
+                        return (
+                          <button
+                            key={dateKey}
+                            type="button"
+                            data-testid={`student-checkin-date-${dateKey}`}
+                            aria-pressed={isSelected}
+                            aria-label={dateKeyToLocalDate(dateKey).toLocaleDateString(
+                              "pt-BR",
+                              { weekday: "long", day: "numeric", month: "long" },
+                            )}
+                            disabled={!isAllowed}
+                            onClick={() => onSelectedDateKeyChange(dateKey)}
+                            className={`flex min-h-[3.25rem] flex-col items-center justify-center rounded-lg border py-2 text-sm transition-colors ${
+                              isSelected
+                                ? "border-amber-500/50 bg-amber-500/15 text-amber-200 shadow-sm shadow-amber-500/10"
+                                : isAllowed
+                                  ? "border-zinc-700/80 bg-zinc-900/50 text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800/60"
+                                  : "cursor-not-allowed border-transparent bg-transparent text-zinc-600 opacity-40"
+                            }`}
+                          >
+                            <span
+                              className={`text-base font-semibold leading-none sm:text-lg ${
+                                isToday && isAllowed ? "text-amber-300" : ""
+                              }`}
+                            >
+                              {dayNumber}
+                            </span>
+                            {isToday && isAllowed && (
+                              <span className="mt-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-400/90">
+                                Hoje
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
                 {!isSelectedDateToday && selectedDateAllowed && (
@@ -129,7 +186,7 @@ export function CheckinTab({
                   Escolha a turma
                 </p>
                 <select
-                  className="w-full min-w-0 cursor-pointer rounded-xl border border-zinc-800 bg-black/30 px-3 py-3 text-base text-zinc-100 outline-none focus:border-amber-500/40 disabled:opacity-50 sm:px-4 sm:text-sm"
+                  className="dashboard-input w-full min-w-0 cursor-pointer px-3 py-3 text-base outline-none focus:border-amber-500/40 disabled:opacity-50 sm:px-4 sm:text-sm"
                   value={selectedClassId}
                   onChange={(e) => onSelectedClassIdChange(e.target.value)}
                   disabled={classes.length === 0}
@@ -154,7 +211,7 @@ export function CheckinTab({
               </div>
 
               <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
-                <div className="min-w-[7rem] flex-1 rounded-2xl border border-zinc-700/50 bg-zinc-800/50 px-4 py-2 sm:flex-none">
+                <div className="dashboard-stat min-w-[7rem] flex-1 px-4 py-2 sm:flex-none">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
                     Disponíveis
                   </p>
@@ -162,7 +219,7 @@ export function CheckinTab({
                     {currentWeekInfo.remaining}
                   </p>
                 </div>
-                <div className="min-w-[7rem] flex-1 rounded-2xl border border-zinc-700/50 bg-zinc-800/50 px-4 py-2 sm:flex-none">
+                <div className="dashboard-stat min-w-[7rem] flex-1 px-4 py-2 sm:flex-none">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
                     Total semanal
                   </p>

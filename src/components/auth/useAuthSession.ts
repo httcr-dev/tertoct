@@ -25,6 +25,7 @@ import { mapAuthError, pendingSignInFailureMessage } from "@/components/auth/aut
 import {
   AUTH_PENDING_GRACE_MS,
   clearAuthPendingExpiry,
+  clearStaleAuthPending,
   hasPendingSignIn,
   markSignInPending,
 } from "@/components/auth/pendingSignIn";
@@ -34,6 +35,7 @@ export type AuthSessionState = {
   firebaseUser: FirebaseUser | null;
   profile: AppUserProfile | null;
   loading: boolean;
+  authPending: boolean;
   authError: string | null;
   signInWithGoogle: () => Promise<void>;
   signOutUser: () => Promise<void>;
@@ -86,6 +88,7 @@ export function useAuthSession(): AuthSessionState {
   useEffect(() => {
     const auth = getFirebaseAuth();
     let unsubscribe: (() => void) | null = null;
+    let bootstrapTimeout: ReturnType<typeof setTimeout> | undefined;
 
     const syncUserSession = async (user: FirebaseUser): Promise<void> => {
       if (recoveringSessionRef.current) return;
@@ -164,19 +167,30 @@ export function useAuthSession(): AuthSessionState {
       if (hasPendingSignIn()) {
         setAuthPending(true);
         schedulePendingFailure();
-        return;
+      } else {
+        setPending(false);
       }
 
-      setPending(false);
       setLoading(false);
     };
 
     const initAuth = async () => {
+      clearStaleAuthPending();
+
       if (hasPendingSignIn()) {
         setAuthPending(true);
       } else {
         clearAuthPendingExpiry();
+        setAuthPending(false);
       }
+
+      bootstrapTimeout = setTimeout(() => {
+        if (!auth.currentUser) {
+          clearAuthPendingExpiry();
+          setAuthPending(false);
+          setLoading(false);
+        }
+      }, 10_000);
 
       unsubscribe = onIdTokenChanged(auth, (user) => {
         if (recoveringSessionRef.current && user) return;
@@ -200,11 +214,18 @@ export function useAuthSession(): AuthSessionState {
         setLoading(false);
         clearAuthPendingExpiry();
       }
+
+      if (!auth.currentUser) {
+        setLoading(false);
+      }
     };
 
     void initAuth();
 
     return () => {
+      if (bootstrapTimeout !== undefined) {
+        clearTimeout(bootstrapTimeout);
+      }
       clearPendingTimeout();
       unsubscribe?.();
     };
@@ -241,7 +262,8 @@ export function useAuthSession(): AuthSessionState {
   return {
     firebaseUser,
     profile,
-    loading: loading || authPending,
+    loading,
+    authPending,
     authError,
     signInWithGoogle,
     signOutUser,

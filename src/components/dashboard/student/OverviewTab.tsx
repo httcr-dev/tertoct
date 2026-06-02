@@ -56,7 +56,7 @@ export function OverviewTab({
       )}
 
       <section className="grid gap-6 md:grid-cols-2">
-        <div className="rounded-3xl border border-amber-500/20 bg-zinc-900/30 p-6 backdrop-blur-md gold-glow">
+        <div className="dashboard-card dashboard-card-accent p-6">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">
               Seu Plano
@@ -84,7 +84,7 @@ export function OverviewTab({
           )}
         </div>
 
-        <div className="rounded-3xl border border-zinc-800/60 bg-zinc-900/30 p-6 backdrop-blur-md">
+        <div className="dashboard-card p-6">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">
               Status da Semana
@@ -121,7 +121,7 @@ export function OverviewTab({
           <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
           Sua Atividade (semana atual)
         </h3>
-        <div className="rounded-3xl border border-zinc-800/60 bg-zinc-900/30 p-6 backdrop-blur-sm shadow-inner shadow-amber-500/5">
+        <div className="dashboard-card p-6 shadow-inner shadow-amber-500/5">
           <BarChart dataItems={checkIns} range="week" />
         </div>
       </section>
@@ -131,7 +131,7 @@ export function OverviewTab({
           <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
           Atividade Recente
         </h3>
-        <div className="rounded-3xl border border-zinc-800/50 bg-zinc-900/20 divide-y divide-zinc-800/40 overflow-hidden">
+        <div className="dashboard-card divide-y divide-zinc-800/40 overflow-hidden">
           {checkIns.slice(0, 5).map((checkIn) => {
             const gymClass = checkIn.classId
               ? classesById.get(checkIn.classId) ?? null

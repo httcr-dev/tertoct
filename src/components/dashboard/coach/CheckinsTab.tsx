@@ -158,7 +158,7 @@ export function CheckinsTab({
 
   return (
     <section className="w-full min-w-0 space-y-5 overflow-x-hidden">
-      <div className="animate-panel-in rounded-2xl border border-zinc-800/60 bg-zinc-950/45 p-4 shadow-xl shadow-black/20 backdrop-blur-sm sm:p-5">
+      <div className="dashboard-card animate-panel-in p-4 sm:p-5">
         <div className="flex flex-col gap-4">
           <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
             <div>
@@ -253,7 +253,7 @@ export function CheckinsTab({
       </div>
 
       {/* Activity chart */}
-      <div className="animate-panel-in overflow-hidden rounded-2xl border border-zinc-800/60 bg-zinc-950/45 p-4 shadow-xl shadow-black/20 backdrop-blur-sm sm:p-6 [animation-delay:80ms]">
+      <div className="dashboard-card animate-panel-in overflow-hidden p-4 sm:p-6 [animation-delay:80ms]">
         <div className="flex items-start justify-between gap-3">
           <h3 className="flex min-w-0 items-center gap-2 text-sm font-medium text-zinc-300">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
@@ -338,7 +338,7 @@ export function CheckinsTab({
 
       <div className="grid min-w-0 gap-3">
         {isLoadingWeekData && viewMode === "week" ? (
-          <div className="rounded-2xl border border-zinc-800/60 bg-zinc-950/30 px-6 py-12 text-center">
+          <div className="dashboard-card px-6 py-12 text-center">
             <div className="flex items-center justify-center gap-3">
               <div className="h-5 w-5 animate-spin rounded-full border-2 border-amber-500/30 border-t-amber-500" />
               <p className="text-sm font-medium text-zinc-400">
@@ -355,7 +355,7 @@ export function CheckinsTab({
             return (
               <div
                 key={c.id}
-                className="group animate-panel-in flex min-w-0 flex-col gap-4 rounded-2xl border border-zinc-800/60 bg-zinc-950/45 px-4 py-4 shadow-lg shadow-black/15 transition-all hover:-translate-y-0.5 hover:border-amber-500/20 hover:bg-zinc-900/50 sm:flex-row sm:items-center sm:justify-between sm:px-5"
+                className="dashboard-card group animate-panel-in flex min-w-0 flex-col gap-4 px-4 py-4 transition-all hover:-translate-y-0.5 hover:border-amber-500/20 sm:flex-row sm:items-center sm:justify-between sm:px-5"
               >
                 <div className="flex min-w-0 items-center gap-3 sm:gap-4">
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-amber-500/20 bg-amber-500/10 font-semibold text-amber-400 shadow-sm shadow-amber-500/20 transition-transform group-hover:scale-105">
@@ -418,7 +418,7 @@ export function CheckinsTab({
             );
           })
         ) : (
-          <div className="rounded-2xl border border-dashed border-zinc-800/60 bg-zinc-950/30 px-6 py-12 text-center">
+          <div className="dashboard-card px-6 py-12 text-center">
             <p className="text-sm font-medium text-zinc-500">
               {viewMode === "week" 
                 ? "Nenhum check-in encontrado para a semana atual."

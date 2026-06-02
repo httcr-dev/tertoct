@@ -53,6 +53,12 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
       - run: npm i -g firebase-tools
 
       - name: Run tests with emulator (mais estável)
@@ -71,6 +77,12 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
       - run: npm i -g firebase-tools
       - run: npx playwright install --with-deps chromium
 

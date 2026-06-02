@@ -210,7 +210,7 @@ export function ExpirationsTab({
 
       <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {filteredStudents.length === 0 ? (
-          <div className="col-span-full rounded-xl border border-dashed border-zinc-800/50 p-8 text-center text-zinc-500">
+          <div className="dashboard-card col-span-full border-dashed p-8 text-center text-zinc-500">
             Nenhum aluno encontrado para esse filtro.
           </div>
         ) : (
@@ -226,10 +226,10 @@ export function ExpirationsTab({
             return (
               <div
                 key={student.id}
-                className={`relative flex min-w-0 flex-col gap-4 rounded-xl border p-4 shadow-sm transition-colors ${
-                  isDueTomorrow 
-                    ? "border-amber-500/50 bg-amber-500/5" 
-                    : "border-zinc-800/40 bg-zinc-900/40"
+                className={`dashboard-card relative flex min-w-0 flex-col gap-4 p-4 transition-colors ${
+                  isDueTomorrow
+                    ? "dashboard-card-active"
+                    : ""
                 }`}
               >
                 <div>

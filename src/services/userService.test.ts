@@ -1,6 +1,12 @@
 export {};
 
-import { assignPlan, setPaymentDay, togglePayment, toggleUserActive } from "./userService";
+import {
+  assignPlan,
+  setPaymentDay,
+  togglePayment,
+  toggleUserActive,
+  updateUserPhone,
+} from "./userService";
 beforeEach(() => {
   jest.clearAllMocks();
   global.fetch = jest.fn().mockResolvedValue({
@@ -57,5 +63,55 @@ describe("toggleUserActive", () => {
   it("calls API for active toggle", async () => {
     await toggleUserActive("student-1");
     expect(global.fetch).toHaveBeenCalled();
+  });
+
+  it("throws when API fails", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false });
+    await expect(toggleUserActive("student-1")).rejects.toThrow(
+      "Failed to toggle user active",
+    );
+  });
+});
+
+describe("updateUserPhone", () => {
+  it("calls API with phone", async () => {
+    await updateUserPhone("student-1", "11999999999");
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/private/users/student-1",
+      expect.objectContaining({ method: "PATCH" }),
+    );
+  });
+
+  it("throws when API fails", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false });
+    await expect(updateUserPhone("s", null)).rejects.toThrow(
+      "Failed to update phone",
+    );
+  });
+});
+
+describe("API error handling", () => {
+  it("assignPlan throws on failure", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false });
+    await expect(assignPlan("s", "p")).rejects.toThrow("Failed to assign plan");
+  });
+
+  it("setPaymentDay throws on failure", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false });
+    await expect(setPaymentDay("s", 10)).rejects.toThrow(
+      "Failed to update payment day",
+    );
+  });
+
+  it("togglePayment throws on failure", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false });
+    await expect(
+      togglePayment({
+        id: "s",
+        name: "n",
+        email: "e",
+        weeklyCheckIns: 0,
+      }),
+    ).rejects.toThrow("Failed to toggle payment");
   });
 });

@@ -55,7 +55,7 @@ export function PlansTab({
           plans.map((plan) => (
             <div
               key={plan.id}
-              className="group relative flex flex-col overflow-hidden rounded-2xl border border-zinc-800/60 bg-zinc-900/40 p-6 transition-colors hover:border-amber-500/30"
+              className="dashboard-card group relative flex flex-col overflow-hidden p-6 transition-colors hover:border-amber-500/30"
             >
               {!plan.active && (
                 <div className="absolute right-4 top-4 rounded-full border border-zinc-700/50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500">

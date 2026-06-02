@@ -52,6 +52,14 @@ export function hasPendingSignIn(): boolean {
   return readAuthPendingExpiry() > Date.now();
 }
 
+/** Remove login pendente expirado (comum após popup Google fechado). */
+export function clearStaleAuthPending(): void {
+  const expiry = readAuthPendingExpiry();
+  if (expiry > 0 && expiry <= Date.now()) {
+    clearAuthPendingExpiry();
+  }
+}
+
 export function markSignInPending(): void {
   writeAuthPendingExpiry(Date.now() + AUTH_PENDING_TTL_MS);
 }

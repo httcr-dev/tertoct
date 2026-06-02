@@ -130,7 +130,7 @@ export function OverviewTab({
 
   return (
     <section className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-      <div className="animate-panel-in flex flex-col justify-between rounded-2xl border border-zinc-800/60 bg-zinc-900/50 p-6 shadow-xl shadow-black/10 transition-all duration-300 hover:-translate-y-0.5 hover:border-amber-500/25 hover:bg-zinc-900/70">
+      <div className="dashboard-card animate-panel-in flex flex-col justify-between p-6 transition-all duration-300 hover:-translate-y-0.5 hover:border-amber-500/25">
         <div className="mb-4 flex items-center gap-3">
           <div className="rounded-lg bg-amber-500/10 p-2 text-amber-500">
             <Users className="h-4 w-4" />
@@ -140,7 +140,7 @@ export function OverviewTab({
         <p className="text-3xl font-semibold text-zinc-100">{students.length}</p>
       </div>
 
-      <div className="animate-panel-in flex flex-col justify-between rounded-2xl border border-zinc-800/60 bg-zinc-900/50 p-6 shadow-xl shadow-black/10 transition-all duration-300 hover:-translate-y-0.5 hover:border-emerald-500/25 hover:bg-zinc-900/70 [animation-delay:60ms]">
+      <div className="dashboard-card animate-panel-in flex flex-col justify-between p-6 transition-all duration-300 hover:-translate-y-0.5 hover:border-emerald-500/25 [animation-delay:60ms]">
         <div className="mb-4 flex items-center gap-3">
           <div className="rounded-lg bg-emerald-500/10 p-2 text-emerald-500">
             <List className="h-4 w-4" />
@@ -150,7 +150,7 @@ export function OverviewTab({
         <p className="text-3xl font-semibold text-zinc-100">{activePlansCount}</p>
       </div>
 
-      <div className="animate-panel-in flex flex-col justify-between rounded-2xl border border-zinc-800/60 bg-zinc-900/50 p-6 shadow-xl shadow-black/10 transition-all duration-300 hover:-translate-y-0.5 hover:border-blue-500/25 hover:bg-zinc-900/70 sm:col-span-2 lg:col-span-1 [animation-delay:120ms]">
+      <div className="dashboard-card animate-panel-in flex flex-col justify-between p-6 transition-all duration-300 hover:-translate-y-0.5 hover:border-blue-500/25 sm:col-span-2 lg:col-span-1 [animation-delay:120ms]">
         <div className="mb-4 flex items-center gap-3">
           <div className="rounded-lg bg-blue-500/10 p-2 text-blue-500">
             <CheckCircle className="h-4 w-4" />
@@ -160,7 +160,7 @@ export function OverviewTab({
         <p className="text-3xl font-semibold text-zinc-100">{recentCheckinsCount}</p>
       </div>
 
-      <div className="animate-panel-in overflow-hidden rounded-2xl border border-amber-500/15 bg-gradient-to-br from-zinc-900/80 via-zinc-900/45 to-black/20 p-6 shadow-2xl shadow-black/20 lg:col-span-3 [animation-delay:180ms]">
+      <div className="dashboard-card dashboard-card-accent animate-panel-in overflow-hidden bg-gradient-to-br from-zinc-900/70 via-zinc-900/40 to-zinc-950/30 p-6 lg:col-span-3 [animation-delay:180ms]">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-100">

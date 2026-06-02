@@ -23,11 +23,15 @@ module.exports = {
     "src/lib/utils/**/*.ts",
     "src/services/**/*.ts",
     "src/lib/firebase.ts",
+    "src/lib/auth/authorization.ts",
+    "src/lib/auth/privateRoute.ts",
+    "src/lib/validations/**/*.ts",
     // Exclude config/visual-only files
     "!src/app/**",
     "!src/components/**",
     "!src/lib/types.ts",
     "!**/*.d.ts",
+    "!**/*.test.ts",
   ],
   coverageThreshold: {
     global: {

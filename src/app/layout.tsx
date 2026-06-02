@@ -41,7 +41,7 @@ export default async function RootLayout({
         />
         <AuthProvider>{children}</AuthProvider>
 
-        <footer className="bg-zinc-900 border-t border-zinc-800 text-zinc-400 py-8 flex flex-col items-center justify-center gap-4 mt-auto relative z-10">
+        <footer className="relative z-10 mt-auto flex flex-col items-center justify-center gap-4 border-t border-zinc-800/60 bg-zinc-950/80 py-8 text-zinc-400 backdrop-blur-sm">
           <p className="text-sm">
             &copy; 2026 TertoCT. Todos os direitos reservados.
           </p>

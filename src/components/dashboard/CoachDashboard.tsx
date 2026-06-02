@@ -538,9 +538,9 @@ export function CoachDashboard() {
   }
 
   return (
-    <div className="flex min-h-screen w-full overflow-x-hidden bg-transparent text-zinc-50 selection:bg-amber-500/30">
+    <div className="dashboard-layout flex min-h-screen w-full overflow-x-hidden text-zinc-50 selection:bg-amber-500/30">
       {/* Sidebar */}
-      <aside className="w-64 flex-shrink-0 border-r border-zinc-800/40 bg-black/20 backdrop-blur-xl p-6 hidden md:flex flex-col">
+      <aside className="dashboard-sidebar hidden w-64 flex-col p-6 md:flex">
         <div className="mb-10 px-2 mt-2">
           <div className="flex items-center gap-3">
             <Image
@@ -574,7 +574,7 @@ export function CoachDashboard() {
               type="button"
               data-testid={`coach-tab-${tab}`}
               onClick={() => handleTabChange(tab)}
-              className={`flex items-center gap-3 w-full text-left rounded-lg px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer ${selectedTab === tab ? "bg-zinc-800/60 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"}`}
+              className={`dashboard-nav-item ${selectedTab === tab ? "dashboard-nav-item-active" : ""}`}
             >
               <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
               {label}
@@ -584,7 +584,7 @@ export function CoachDashboard() {
       </aside>
 
       {/* Mobile bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 grid grid-cols-6 border-t border-zinc-800/60 bg-black/95 px-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl md:hidden">
+      <nav className="dashboard-mobile-nav grid grid-cols-6 px-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 md:hidden">
         {(
           [
             { tab: "overview", icon: <Home className="h-5 w-5" />, label: "Início" },
@@ -600,7 +600,7 @@ export function CoachDashboard() {
             type="button"
             data-testid={`coach-tab-${tab}`}
             onClick={() => handleTabChange(tab)}
-            className={`flex min-w-0 cursor-pointer flex-col items-center gap-0.5 rounded-lg px-1 py-1 text-[9px] font-semibold transition-all active:scale-95 min-[380px]:text-[10px] ${selectedTab === tab ? "bg-amber-500/10 text-amber-400" : "text-zinc-500"}`}
+            className={`dashboard-mobile-tab min-[380px]:text-[10px] text-[9px] px-1 py-1 ${selectedTab === tab ? "dashboard-mobile-tab-active" : ""}`}
           >
             {icon}
             <span className="w-full truncate text-center">{label}</span>
@@ -611,8 +611,9 @@ export function CoachDashboard() {
       {/* Main content */}
       <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-4 pb-24 sm:px-4 md:px-8 md:py-6 md:pb-6">
         <div className="mx-auto flex w-full min-w-0 max-w-6xl flex-col gap-5 pb-8 md:min-h-screen md:gap-8">
-          <header className="sticky top-0 z-30 -mx-3 flex items-center justify-between gap-3 border-b border-zinc-800/50 bg-black/85 px-3 pb-4 pt-2 backdrop-blur-xl md:static md:mx-0 md:bg-transparent md:px-0 md:pb-6 md:pt-2 md:backdrop-blur-0">
+          <header className="dashboard-header-sticky flex items-center justify-between gap-3">
             <div>
+              <p className="dashboard-eyebrow hidden md:block">Painel · TertoCT</p>
               <h1 className="text-lg font-bold tracking-tight text-zinc-100 md:text-xl">
                 {selectedTab === "overview" && "Visão Geral"}
                 {selectedTab === "plans" && "Planos"}

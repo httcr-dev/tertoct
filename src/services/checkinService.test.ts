@@ -9,12 +9,14 @@ const mockDoc = jest.fn((_db, col, id) => `${col}/${id ?? "new-id"}`);
 const mockRunTransaction = jest.fn();
 const mockTxGet = jest.fn();
 const mockTxSet = jest.fn();
+const mockOnSnapshot = jest.fn();
 
 jest.mock("firebase/firestore", () => ({
   addDoc: mockAddDoc,
   collection: mockCollection,
   doc: mockDoc,
   getDocs: mockGetDocs,
+  onSnapshot: (...args: unknown[]) => mockOnSnapshot(...args),
   query: mockQuery,
   runTransaction: mockRunTransaction,
   where: mockWhere,
@@ -27,7 +29,12 @@ jest.mock("@/lib/firebase", () => ({
 
 // Don't mock toDate — let it use the real implementation for integration coverage
 
-import { cancelCheckIn, createCheckIn, fetchCheckinsByUser } from "./checkinService";
+import {
+  cancelCheckIn,
+  createCheckIn,
+  fetchCheckinsByUser,
+  listenCheckinsByUser,
+} from "./checkinService";
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -53,6 +60,15 @@ describe("cancelCheckIn", () => {
       { method: "DELETE" },
     );
   });
+
+  it("throws API error message when cancel fails", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ error: "Prazo expirado" }),
+    });
+
+    await expect(cancelCheckIn("id")).rejects.toThrow("Prazo expirado");
+  });
 });
 
 describe("createCheckIn", () => {
@@ -62,6 +78,39 @@ describe("createCheckIn", () => {
     expect(global.fetch).toHaveBeenCalledWith(
       "/api/private/checkins",
       expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("includes classDateKey when provided", async () => {
+    await createCheckIn("user-1", "plan-1", "class-1", "2026-06-01");
+
+    const [, init] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(JSON.parse(init.body)).toEqual({
+      planId: "plan-1",
+      classId: "class-1",
+      classDateKey: "2026-06-01",
+    });
+  });
+
+  it("throws API error message when available", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ error: "Turma lotada" }),
+    });
+
+    await expect(createCheckIn("u", "p", "c")).rejects.toThrow("Turma lotada");
+  });
+
+  it("throws generic message when response body is invalid", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: false,
+      json: async () => {
+        throw new Error("parse");
+      },
+    });
+
+    await expect(createCheckIn("u", "p", "c")).rejects.toThrow(
+      "Falha no check-in",
     );
   });
 });
@@ -220,5 +269,90 @@ describe("fetchCheckinsByUser", () => {
     expect(result).toHaveLength(2);
     expect(result[0].id).toBe("checkin-y");
     expect(result[1].id).toBe("checkin-x");
+  });
+
+  it("filters by lastDays option", async () => {
+    const now = Date.now();
+    const recent = new Date(now - 2 * 24 * 60 * 60 * 1000);
+    const old = new Date(now - 30 * 24 * 60 * 60 * 1000);
+    const mockDocs = [
+      {
+        id: "recent",
+        data: () => ({
+          userId: "user-1",
+          planId: "plan-1",
+          createdAt: { toDate: () => recent },
+        }),
+      },
+      {
+        id: "old",
+        data: () => ({
+          userId: "user-1",
+          planId: "plan-1",
+          createdAt: { toDate: () => old },
+        }),
+      },
+    ];
+
+    mockGetDocs.mockResolvedValue({ docs: mockDocs });
+
+    const result = await fetchCheckinsByUser("user-1", { lastDays: 7 });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe("recent");
+  });
+
+  it("uses docs array when snapshot provides docs", async () => {
+    const mockDocs = [
+      {
+        id: "d1",
+        data: () => ({
+          userId: "u",
+          planId: "p",
+          createdAt: { toDate: () => new Date(2026, 0, 2) },
+        }),
+      },
+    ];
+    mockGetDocs.mockResolvedValue({ docs: mockDocs });
+
+    const result = await fetchCheckinsByUser("u");
+    expect(result[0].id).toBe("d1");
+  });
+});
+
+describe("listenCheckinsByUser", () => {
+  it("subscribes and sorts check-ins descending", () => {
+    const onData = jest.fn();
+    mockOnSnapshot.mockImplementationOnce(
+      (_q: unknown, onNext: (snap: { docs: { id: string; data: () => object }[] }) => void) => {
+        onNext({
+          docs: [
+            {
+              id: "a",
+              data: () => ({
+                userId: "u",
+                planId: "p",
+                createdAt: { toDate: () => new Date(2026, 0, 1) },
+              }),
+            },
+            {
+              id: "b",
+              data: () => ({
+                userId: "u",
+                planId: "p",
+                createdAt: { toDate: () => new Date(2026, 0, 5) },
+              }),
+            },
+          ],
+        });
+        return () => undefined;
+      },
+    );
+
+    listenCheckinsByUser("user-1", onData);
+
+    expect(mockOnSnapshot).toHaveBeenCalled();
+    expect(onData.mock.calls[0][0][0].id).toBe("b");
+    expect(onData.mock.calls[0][0][1].id).toBe("a");
   });
 });
