@@ -66,6 +66,16 @@ describe("isPaymentOverdue", () => {
   });
 
   describe("with paymentValidUntil", () => {
+    it("returns false when validUntil is ISO string in the future", () => {
+      const now = new Date(2025, 5, 1, 12, 0, 0);
+      const validUntil = endOfDueDayInMonth(2025, 6, 28).toISOString();
+      const profile = makeProfile({
+        paymentDueDay: 28,
+        paymentValidUntil: validUntil,
+      });
+      expect(isPaymentOverdue(profile, now)).toBe(false);
+    });
+
     it("returns false when validUntil is in the future", () => {
       const now = new Date(2025, 5, 1, 12, 0, 0);
       const validUntil = endOfDueDayInMonth(2025, 6, 28);
@@ -84,6 +94,23 @@ describe("isPaymentOverdue", () => {
         paymentValidUntil: { toDate: () => validUntil },
       });
       expect(isPaymentOverdue(profile, now)).toBe(true);
+    });
+
+    it("returns false when validUntil string cannot be parsed", () => {
+      const profile = makeProfile({
+        paymentDueDay: 28,
+        monthlyPaymentPaid: false,
+        paymentValidUntil: "not-a-date",
+      });
+      const now = new Date(2025, 5, 29, 12, 0, 0);
+      expect(isPaymentOverdue(profile, now)).toBe(false);
+    });
+
+    it("returns true when validUntil is a Date in the past", () => {
+      const profile = makeProfile({
+        paymentValidUntil: new Date(2020, 0, 1),
+      });
+      expect(isPaymentOverdue(profile, new Date(2025, 5, 1))).toBe(true);
     });
   });
 

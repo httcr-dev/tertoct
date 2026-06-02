@@ -120,6 +120,40 @@ describe("deletePlan", () => {
   });
 });
 
+describe("createPlan and updatePlan errors", () => {
+  it("createPlan throws when API fails", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false });
+    await expect(
+      createPlan({
+        name: "P",
+        price: 10,
+        classesPerWeek: 1,
+        active: true,
+      }),
+    ).rejects.toThrow("Failed to create plan");
+  });
+
+  it("updatePlan throws when API fails", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false });
+    await expect(updatePlan("id", { name: "X" })).rejects.toThrow(
+      "Failed to update plan",
+    );
+  });
+
+  it("togglePlanActive throws when API fails", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false });
+    await expect(
+      togglePlanActive({
+        id: "p",
+        name: "P",
+        price: 1,
+        classesPerWeek: 1,
+        active: true,
+      }),
+    ).rejects.toThrow("Failed to toggle plan");
+  });
+});
+
 describe("togglePlanActive", () => {
   it("calls toggle endpoint for active plan", async () => {
     const plan: Plan = {

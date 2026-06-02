@@ -39,6 +39,9 @@ jest.mock("@/lib/firestore/refs", () => ({
 }));
 
 import {
+  fetchCheckinsByDateKeys,
+  fetchCheckinsByDateRange,
+  fetchCurrentWeekCheckins,
   fetchRecentCheckinsSince,
   listenCheckinCountsSince,
   listenCoaches,
@@ -152,5 +155,69 @@ describe("dashboardService", () => {
 
     expect(mockTimestampFromDate).toHaveBeenCalledWith(since);
     expect(result).toEqual([{ id: "x1" }, { id: "x2" }]);
+  });
+
+  it("fetchCheckinsByDateRange queries createdAt range", async () => {
+    const start = new Date("2026-01-01");
+    const end = new Date("2026-01-07");
+    mockGetDocs.mockResolvedValueOnce({ docs: [{ id: "r1" }] });
+    mockMapCheckin.mockImplementation((d: { id: string }) => ({ id: d.id }));
+
+    const result = await fetchCheckinsByDateRange(start, end);
+
+    expect(result).toEqual([{ id: "r1" }]);
+    expect(mockWhere).toHaveBeenCalled();
+  });
+
+  it("fetchCheckinsByDateKeys returns empty for no keys", async () => {
+    const result = await fetchCheckinsByDateKeys([]);
+    expect(result).toEqual([]);
+    expect(mockGetDocs).not.toHaveBeenCalled();
+  });
+
+  it("fetchCheckinsByDateKeys uses single query for up to 5 keys", async () => {
+    const keys = ["2026-06-01", "2026-06-02"];
+    mockGetDocs.mockResolvedValueOnce({
+      docs: [{ id: "k1" }, { id: "k2" }],
+    });
+    mockMapCheckin.mockImplementation((d: { id: string }) => ({
+      id: d.id,
+      createdAt: new Date(2026, 5, Number(d.id.replace("k", ""))),
+    }));
+
+    const result = await fetchCheckinsByDateKeys(keys);
+
+    expect(mockGetDocs).toHaveBeenCalledTimes(1);
+    expect(result).toHaveLength(2);
+  });
+
+  it("fetchCheckinsByDateKeys batches more than 5 keys", async () => {
+    const keys = Array.from({ length: 7 }, (_, i) => `2026-06-0${i + 1}`);
+    mockGetDocs
+      .mockResolvedValueOnce({
+        docs: [{ id: "a" }],
+      })
+      .mockResolvedValueOnce({
+        docs: [{ id: "b" }],
+      });
+    mockMapCheckin.mockImplementation((d: { id: string }) => ({
+      id: d.id,
+      createdAt: d.id === "b" ? new Date(2026, 5, 10) : new Date(2026, 5, 1),
+    }));
+
+    const result = await fetchCheckinsByDateKeys(keys);
+
+    expect(mockGetDocs).toHaveBeenCalledTimes(2);
+    expect(result[0].id).toBe("b");
+    expect(result[1].id).toBe("a");
+  });
+
+  it("fetchCurrentWeekCheckins returns mapped checkins", async () => {
+    mockGetDocs.mockResolvedValueOnce({ docs: [{ id: "w1" }] });
+    mockMapCheckin.mockImplementation((d: { id: string }) => ({ id: d.id }));
+
+    const result = await fetchCurrentWeekCheckins();
+
+    expect(result).toEqual([{ id: "w1" }]);
   });
 });
