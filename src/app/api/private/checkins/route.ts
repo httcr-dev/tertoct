@@ -8,6 +8,8 @@ import { isTrustedMutationRequest } from "@/lib/security/origin";
 import { startOfWeek } from "@/lib/utils/date";
 import { parseHHmm } from "@/lib/utils/time";
 import { getDateKeyForOffset, utcDateAtLocalTime } from "@/lib/utils/dateKey";
+import { isPaymentOverdue } from "@/lib/utils/payment";
+import type { AppUserProfile } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -69,6 +71,23 @@ export async function POST(req: Request) {
       const plan = planSnap.data() ?? {};
       if (user.planId !== planId || plan.active !== true) {
         throw new Error("Seu plano não está válido para este check-in.");
+      }
+
+      const paymentProfile: AppUserProfile = {
+        id: userId,
+        name: (user.name as string | null | undefined) ?? null,
+        email: (user.email as string | null | undefined) ?? null,
+        role: "student",
+        active: user.active !== false,
+        paymentDueDay:
+          typeof user.paymentDueDay === "number" ? user.paymentDueDay : null,
+        monthlyPaymentPaid: user.monthlyPaymentPaid as boolean | undefined,
+        paymentValidUntil: user.paymentValidUntil ?? null,
+      };
+      if (isPaymentOverdue(paymentProfile)) {
+        throw new Error(
+          "Mensalidade pendente. Regularize seu pagamento para fazer check-in.",
+        );
       }
 
       const gymClass = classSnap.data() ?? {};

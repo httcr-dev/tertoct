@@ -89,6 +89,21 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
+    function isPaymentCurrentForCheckin() {
+      let data = currentUserData();
+      return !('paymentDueDay' in data) ||
+        data.paymentDueDay == null ||
+        (
+          'monthlyPaymentPaid' in data &&
+          data.monthlyPaymentPaid == true
+        ) ||
+        (
+          'paymentValidUntil' in data &&
+          data.paymentValidUntil != null &&
+          request.time <= data.paymentValidUntil
+        );
+    }
+
     function planIsActive(planId) {
       return planId is string &&
         exists(/databases/$(database)/documents/plans/$(planId)) &&
@@ -179,20 +194,8 @@ service cloud.firestore {
             get(/databases/$(database)/documents/checkinCounters/$(request.auth.uid + '_' + request.resource.data.weekKey)).data.count + 1
           )
         ) &&
-        // Payment check: allow if no due day is set, payment is marked as paid, or within valid expiration date
-        (
-          !('paymentDueDay' in currentUserData()) ||
-          currentUserData().paymentDueDay == null ||
-          (
-            'monthlyPaymentPaid' in currentUserData() &&
-            currentUserData().monthlyPaymentPaid == true
-          ) ||
-          (
-            'paymentValidUntil' in currentUserData() &&
-            currentUserData().paymentValidUntil != null &&
-            request.time <= currentUserData().paymentValidUntil
-          )
-        );
+        // Payment check: allow if no due day, marked paid, within validUntil, or still on/before due day
+        isPaymentCurrentForCheckin();
 
       // Cancelamento pelo aluno: apenas via API privada (Admin SDK), que valida
       // propriedade do check-in, janela de 1h antes da turma e decrementa contadores.

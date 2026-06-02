@@ -350,9 +350,9 @@ export function StudentDashboard() {
 
   // ── Render ───────────────────────────────────────────────────────────
   return (
-    <div className="flex min-h-screen bg-transparent text-zinc-50 selection:bg-amber-500/30">
+    <div className="dashboard-layout flex min-h-screen text-zinc-50 selection:bg-amber-500/30">
       {/* Sidebar */}
-      <aside className="w-64 flex-shrink-0 border-r border-zinc-800/40 bg-black/40 backdrop-blur-2xl p-6 lg:flex flex-col hidden md:flex">
+      <aside className="dashboard-sidebar hidden w-64 flex-col p-6 md:flex">
         <div className="mb-10 px-2 mt-2">
           <div className="flex items-center gap-3">
             <Image
@@ -383,10 +383,8 @@ export function StudentDashboard() {
               type="button"
               data-testid={`student-tab-${tab}`}
               onClick={() => handleTabChange(tab)}
-              className={`flex items-center gap-3 w-full text-left rounded-lg px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer ${
-                selectedTab === tab
-                  ? "bg-zinc-800/60 text-zinc-100"
-                  : "text-zinc-400 hover:text-zinc-200"
+              className={`dashboard-nav-item ${
+                selectedTab === tab ? "dashboard-nav-item-active" : ""
               }`}
             >
               <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
@@ -397,7 +395,7 @@ export function StudentDashboard() {
       </aside>
 
       {/* Mobile bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 flex md:hidden items-center justify-around border-t border-zinc-800/60 bg-black/90 backdrop-blur-xl px-2 py-2">
+      <nav className="dashboard-mobile-nav flex md:hidden items-center justify-around px-2 py-2">
         {(
           [
             { tab: "overview" as const, icon: <Home className="h-5 w-5" />, label: "Início" },
@@ -409,7 +407,7 @@ export function StudentDashboard() {
           <button
             key={tab}
             onClick={() => handleTabChange(tab)}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-[10px] font-medium transition-colors cursor-pointer ${selectedTab === tab ? "text-amber-500" : "text-zinc-500"}`}
+            className={`dashboard-mobile-tab px-3 py-1 text-[10px] ${selectedTab === tab ? "dashboard-mobile-tab-active" : ""}`}
           >
             {icon}
             {label}
@@ -420,9 +418,9 @@ export function StudentDashboard() {
       {/* Main content */}
       <main className="flex-1 px-4 md:px-8 py-6 pb-20 md:pb-6 overflow-y-auto">
         <div className="flex flex-col gap-8 pb-8 max-w-5xl mx-auto">
-          <header className="flex items-center justify-between border-b border-zinc-800/40 pb-6 pt-2 backdrop-blur-sm">
+          <header className="dashboard-header flex items-center justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-amber-500 font-bold mb-1">
+              <p className="dashboard-eyebrow">
                 {selectedTab === "overview" && "Visão Geral"}
                 {selectedTab === "checkin" && "Check-in semanal"}
                 {selectedTab === "plans" && "Planos disponíveis"}
@@ -460,7 +458,7 @@ export function StudentDashboard() {
           {selectedTab === "overview" && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
               {!hasActivePlan && (
-                <div className="rounded-2xl border border-zinc-700/40 bg-zinc-900/40 p-4 flex items-center gap-4 backdrop-blur-sm">
+                <div className="dashboard-alert flex items-center gap-4 p-4">
                   <div className="h-10 w-10 rounded-xl bg-zinc-800/60 text-zinc-300 flex items-center justify-center shrink-0">
                     <span className="text-lg font-bold">i</span>
                   </div>
@@ -514,10 +512,8 @@ export function StudentDashboard() {
               {plans.map((p) => (
                 <div
                   key={p.id}
-                  className={`rounded-3xl p-6 border transition-all ${
-                    p.id === plan?.id
-                      ? "bg-amber-500/10 border-amber-500/50 shadow-lg shadow-amber-500/5"
-                      : "bg-zinc-900/40 border-zinc-800/60"
+                  className={`dashboard-card p-6 transition-all ${
+                    p.id === plan?.id ? "dashboard-card-active" : ""
                   }`}
                 >
                   <div className="flex justify-between items-start mb-4">
@@ -554,7 +550,7 @@ export function StudentDashboard() {
           {selectedTab === "feedback" && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               {!hasActivePlan ? (
-                <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/30 p-6">
+                <div className="dashboard-card p-6">
                   <p className="text-sm font-semibold text-zinc-200">
                     Feedback disponível apenas com plano ativo.
                   </p>
@@ -564,7 +560,7 @@ export function StudentDashboard() {
                 </div>
               ) : (
                 <>
-                  <div className="rounded-3xl border border-zinc-800/60 bg-zinc-900/30 p-6 backdrop-blur-sm">
+                  <div className="dashboard-card p-6">
                     <p className="text-sm font-semibold text-zinc-100">
                       Enviar feedback (até 64 caracteres)
                     </p>
@@ -576,7 +572,7 @@ export function StudentDashboard() {
                         maxLength={64}
                         placeholder="Ex: Aula incrível hoje!"
                         disabled={feedbackStatus === "loading"}
-                        className="w-full rounded-xl border border-zinc-800 bg-black/30 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-amber-500/40 disabled:opacity-50"
+                        className="dashboard-input w-full px-4 py-3 text-sm disabled:opacity-50"
                       />
                       <button
                         type="button"
@@ -607,7 +603,7 @@ export function StudentDashboard() {
                     </div>
                   </div>
 
-                  <div className="rounded-3xl border border-zinc-800/60 bg-zinc-900/20 overflow-hidden">
+                  <div className="dashboard-card overflow-hidden">
                     <div className="px-6 py-4 border-b border-zinc-800/60">
                       <p className="text-sm font-semibold text-zinc-100">
                         Seus feedbacks

@@ -9,17 +9,18 @@ import { PageLoader } from "@/components/ui/PageLoader";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { firebaseUser, profile, loading } = useAuth();
+  const { firebaseUser, profile, loading, authPending } = useAuth();
+  const sessionLoading = loading || authPending;
 
   const role = useMemo(() => profile?.role ?? null, [profile]);
 
   useEffect(() => {
-    if (!loading && !firebaseUser) {
+    if (!sessionLoading && !firebaseUser) {
       router.replace("/");
     }
-  }, [loading, firebaseUser, router]);
+  }, [sessionLoading, firebaseUser, router]);
 
-  if (loading) {
+  if (sessionLoading) {
     return <PageLoader message="Carregando seu painel..." fullScreen={false} />;
   }
 
@@ -33,11 +34,17 @@ export default function DashboardPage() {
   }
 
   if (!profile) {
-    return null;
+    return (
+      <PageLoader
+        message="Sincronizando seu perfil..."
+        fullScreen={false}
+      />
+    );
   }
 
   return (
-    <div className="min-h-screen bg-black text-zinc-50">
+    <div className="dashboard-shell">
+      <div className="dashboard-shell-atmosphere" aria-hidden />
       {role === "coach" || role === "admin" ? (
         <CoachDashboard />
       ) : (

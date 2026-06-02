@@ -24,7 +24,7 @@ export function ProfessorsTab({
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/30 backdrop-blur-sm">
+      <div className="dashboard-card overflow-hidden backdrop-blur-sm">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-left">
             <thead>

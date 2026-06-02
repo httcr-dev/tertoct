@@ -75,7 +75,7 @@ export function CheckinTab({
           </p>
         </div>
 
-        <div className="relative min-w-0 overflow-hidden rounded-[32px] border border-zinc-800 bg-zinc-900/40 p-5 backdrop-blur-xl sm:rounded-[40px] sm:p-8 group">
+        <div className="dashboard-card dashboard-card-accent relative min-w-0 overflow-hidden p-5 sm:rounded-[40px] sm:p-8 group">
           <div className="absolute inset-0 bg-gradient-to-b from-amber-500/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
 
           {currentWeekInfo && (
@@ -129,7 +129,7 @@ export function CheckinTab({
                   Escolha a turma
                 </p>
                 <select
-                  className="w-full min-w-0 cursor-pointer rounded-xl border border-zinc-800 bg-black/30 px-3 py-3 text-base text-zinc-100 outline-none focus:border-amber-500/40 disabled:opacity-50 sm:px-4 sm:text-sm"
+                  className="dashboard-input w-full min-w-0 cursor-pointer px-3 py-3 text-base outline-none focus:border-amber-500/40 disabled:opacity-50 sm:px-4 sm:text-sm"
                   value={selectedClassId}
                   onChange={(e) => onSelectedClassIdChange(e.target.value)}
                   disabled={classes.length === 0}
@@ -154,7 +154,7 @@ export function CheckinTab({
               </div>
 
               <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
-                <div className="min-w-[7rem] flex-1 rounded-2xl border border-zinc-700/50 bg-zinc-800/50 px-4 py-2 sm:flex-none">
+                <div className="dashboard-stat min-w-[7rem] flex-1 px-4 py-2 sm:flex-none">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
                     Disponíveis
                   </p>
@@ -162,7 +162,7 @@ export function CheckinTab({
                     {currentWeekInfo.remaining}
                   </p>
                 </div>
-                <div className="min-w-[7rem] flex-1 rounded-2xl border border-zinc-700/50 bg-zinc-800/50 px-4 py-2 sm:flex-none">
+                <div className="dashboard-stat min-w-[7rem] flex-1 px-4 py-2 sm:flex-none">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
                     Total semanal
                   </p>
