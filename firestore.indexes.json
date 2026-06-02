@@ -9,14 +9,6 @@
       ]
     },
     {
-      "collectionGroup": "plans",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "active", "order": "ASCENDING" },
-        { "fieldPath": "classesPerWeek", "order": "ASCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "checkins",
       "queryScope": "COLLECTION",
       "fields": [
@@ -25,10 +17,11 @@
       ]
     },
     {
-      "collectionGroup": "checkins",
+      "collectionGroup": "plans",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        { "fieldPath": "active", "order": "ASCENDING" },
+        { "fieldPath": "classesPerWeek", "order": "ASCENDING" }
       ]
     }
   ],

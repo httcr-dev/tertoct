@@ -17,7 +17,7 @@ function tooManyResponse() {
 
 /**
  * Lightweight per-process rate limits in the Next.js proxy (Node runtime).
- * For multi-instance production, complement with Firestore limits on API routes.
+ * Auth routes use a higher ceiling than before (login syncs cookie + claims).
  */
 export function checkProxyRateLimit(req: NextRequest): { allowed: true } | ReturnType<typeof tooManyResponse> {
   const pathname = req.nextUrl.pathname;
@@ -25,9 +25,10 @@ export function checkProxyRateLimit(req: NextRequest): { allowed: true } | Retur
   const ip = getRequestIp(req);
 
   if (pathname.startsWith("/api/auth")) {
+    const maxRequests = isE2eOrEmulator() ? 10_000 : 60;
     const { allowed } = checkRateLimitMemory(`mw:api-auth:${method}:${ip}`, {
       windowMs: WINDOW_MS,
-      maxRequests: isE2eOrEmulator() ? 10_000 : 5,
+      maxRequests,
     });
     if (!allowed) return tooManyResponse();
     return { allowed: true };

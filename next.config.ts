@@ -10,6 +10,12 @@ function devServerPort(): string {
   return process.env.PORT ?? "3000";
 }
 
+function e2eDevOrigins(): string[] {
+  if (process.env.NEXT_PUBLIC_E2E !== "true") return [];
+  const port = devServerPort();
+  return [`http://127.0.0.1:${port}`, `http://localhost:${port}`];
+}
+
 function lanHttpDevOrigins(): string[] {
   if (process.env.NODE_ENV !== "development") return [];
   const port = devServerPort();
@@ -34,6 +40,7 @@ const nextConfig: NextConfig = {
     "*.ngrok-free.app",
     "*.ngrok.io",
     "*.ngrok.app",
+    ...e2eDevOrigins(),
     ...lanHttpDevOrigins(),
     ...extraDevOrigins,
   ],

@@ -15,6 +15,36 @@ async function loadTokens(): Promise<E2eTokens> {
   return JSON.parse(raw) as E2eTokens;
 }
 
+/** Waits until Firebase sign-in + session cookie + claims sync finish (avoids aborting in-flight POSTs). */
+async function waitForSessionSync(page: Page): Promise<void> {
+  const isCookiePost = (response: { url: () => string; request: () => { method: () => string }; ok: () => boolean }) =>
+    response.url().includes("/api/auth/cookie") &&
+    response.request().method() === "POST" &&
+    response.ok();
+
+  const firstCookie = page.waitForResponse(isCookiePost, { timeout: 45_000 });
+  const claimsRefresh = page
+    .waitForResponse(
+      (response) =>
+        response.url().includes("/api/auth/refresh-claims") && response.ok(),
+      { timeout: 45_000 },
+    )
+    .catch(() => undefined);
+
+  await Promise.all([firstCookie, claimsRefresh]);
+
+  await page.waitForResponse(isCookiePost, { timeout: 10_000 }).catch(() => undefined);
+}
+
+async function waitForCoachDashboardReady(page: Page): Promise<void> {
+  await expect(page.getByText("Carregando dados do painel...")).toBeHidden({
+    timeout: 45_000,
+  });
+  await expect(page.getByRole("heading", { name: "Visão Geral" })).toBeVisible({
+    timeout: 45_000,
+  });
+}
+
 export async function signInWithCustomToken(
   page: Page,
   customToken: string,
@@ -27,27 +57,21 @@ export async function signInWithCustomToken(
     { timeout: 30_000 },
   );
 
-  const cookieRequest = page.waitForResponse(
-    (response) =>
-      response.url().includes("/api/auth/cookie") &&
-      response.request().method() === "POST" &&
-      response.ok(),
-    { timeout: 30_000 },
-  );
+  const sessionSync = waitForSessionSync(page);
 
   await page.evaluate(async (token) => {
     await window.__TEROCT_E2E_SIGN_IN__!(token);
   }, customToken);
 
-  await cookieRequest;
+  await sessionSync;
   await page.goto("/dashboard");
 
   if (role === "student") {
-    await expect(page.getByTestId("student-logout")).toBeVisible({ timeout: 30_000 });
-  } else {
-    await expect(page.getByRole("heading", { name: "Visão Geral" })).toBeVisible({
-      timeout: 30_000,
+    await expect(page.getByTestId("student-logout")).toBeVisible({
+      timeout: 45_000,
     });
+  } else {
+    await waitForCoachDashboardReady(page);
   }
 }
 
@@ -63,7 +87,10 @@ export async function signInAsStudent(page: Page): Promise<void> {
 export async function signInAsCoach(page: Page): Promise<void> {
   await page.goto("/dashboard");
   if (
-    await page.getByRole("heading", { name: "Visão Geral" }).isVisible().catch(() => false)
+    await page
+      .getByRole("heading", { name: "Visão Geral" })
+      .isVisible()
+      .catch(() => false)
   ) {
     return;
   }

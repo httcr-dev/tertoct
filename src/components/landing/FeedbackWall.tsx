@@ -36,7 +36,7 @@ export function FeedbackWall() {
           </h2>
         </div>
         <p className="text-xs leading-relaxed text-zinc-500 sm:max-w-[280px] sm:pb-1 sm:text-right">
-          Mensagens curtas enviadas por alunos com plano ativo.
+          Mensagens enviadas por alunos ativos.
         </p>
       </header>
 
