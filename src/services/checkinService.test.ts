@@ -4,6 +4,9 @@ const mockGetDocs = jest.fn();
 const mockCollection = jest.fn().mockReturnValue("checkins-collection-ref");
 const mockQuery = jest.fn().mockReturnValue("checkins-query");
 const mockWhere = jest.fn().mockReturnValue("where-clause");
+const mockOrderBy = jest.fn().mockReturnValue("orderBy-clause");
+const mockLimit = jest.fn().mockReturnValue("limit-clause");
+const mockTimestampFromDate = jest.fn((d: Date) => ({ toDate: () => d }));
 const mockServerTimestamp = jest.fn().mockReturnValue("SERVER_TIMESTAMP");
 const mockDoc = jest.fn((_db, col, id) => `${col}/${id ?? "new-id"}`);
 const mockRunTransaction = jest.fn();
@@ -20,6 +23,9 @@ jest.mock("firebase/firestore", () => ({
   query: mockQuery,
   runTransaction: mockRunTransaction,
   where: mockWhere,
+  orderBy: mockOrderBy,
+  limit: mockLimit,
+  Timestamp: { fromDate: mockTimestampFromDate },
   serverTimestamp: () => mockServerTimestamp(),
 }));
 
@@ -119,14 +125,6 @@ describe("fetchCheckinsByUser", () => {
   it("queries checkins by userId and returns sorted results", async () => {
     const mockDocs = [
       {
-        id: "checkin-1",
-        data: () => ({
-          userId: "user-1",
-          planId: "plan-1",
-          createdAt: { toDate: () => new Date(2026, 0, 1), seconds: 1735689600 },
-        }),
-      },
-      {
         id: "checkin-2",
         data: () => ({
           userId: "user-1",
@@ -134,25 +132,30 @@ describe("fetchCheckinsByUser", () => {
           createdAt: { toDate: () => new Date(2026, 0, 5), seconds: 1736035200 },
         }),
       },
+      {
+        id: "checkin-1",
+        data: () => ({
+          userId: "user-1",
+          planId: "plan-1",
+          createdAt: { toDate: () => new Date(2026, 0, 1), seconds: 1735689600 },
+        }),
+      },
     ];
 
-    mockGetDocs.mockResolvedValue({
-      forEach: (cb: (item: any) => void) => mockDocs.forEach(cb),
-    });
+    mockGetDocs.mockResolvedValue({ docs: mockDocs });
 
     const result = await fetchCheckinsByUser("user-1");
 
     expect(mockWhere).toHaveBeenCalledWith("userId", "==", "user-1");
+    expect(mockOrderBy).toHaveBeenCalledWith("createdAt", "desc");
+    expect(mockLimit).toHaveBeenCalledWith(50);
     expect(result).toHaveLength(2);
-    // Should be sorted descending (newest first)
     expect(result[0].id).toBe("checkin-2");
     expect(result[1].id).toBe("checkin-1");
   });
 
   it("returns empty array when no checkins exist", async () => {
-    mockGetDocs.mockResolvedValue({
-      forEach: () => {},
-    });
+    mockGetDocs.mockResolvedValue({ docs: [] });
 
     const result = await fetchCheckinsByUser("user-empty");
 
@@ -162,14 +165,6 @@ describe("fetchCheckinsByUser", () => {
   it("handles checkins with seconds-based timestamps (no toDate)", async () => {
     const mockDocs = [
       {
-        id: "checkin-3",
-        data: () => ({
-          userId: "user-1",
-          planId: "plan-1",
-          createdAt: { seconds: 1735689600 },
-        }),
-      },
-      {
         id: "checkin-4",
         data: () => ({
           userId: "user-1",
@@ -177,11 +172,17 @@ describe("fetchCheckinsByUser", () => {
           createdAt: { seconds: 1736035200 },
         }),
       },
+      {
+        id: "checkin-3",
+        data: () => ({
+          userId: "user-1",
+          planId: "plan-1",
+          createdAt: { seconds: 1735689600 },
+        }),
+      },
     ];
 
-    mockGetDocs.mockResolvedValue({
-      forEach: (cb: (item: any) => void) => mockDocs.forEach(cb),
-    });
+    mockGetDocs.mockResolvedValue({ docs: mockDocs });
 
     const result = await fetchCheckinsByUser("user-1");
 
@@ -201,9 +202,7 @@ describe("fetchCheckinsByUser", () => {
       },
     ];
 
-    mockGetDocs.mockResolvedValue({
-      forEach: (cb: (item: any) => void) => mockDocs.forEach(cb),
-    });
+    mockGetDocs.mockResolvedValue({ docs: mockDocs });
 
     const result = await fetchCheckinsByUser("user-1");
     expect(result).toHaveLength(1);
@@ -230,9 +229,7 @@ describe("fetchCheckinsByUser", () => {
       },
     ];
 
-    mockGetDocs.mockResolvedValue({
-      forEach: (cb: (item: any) => void) => mockDocs.forEach(cb),
-    });
+    mockGetDocs.mockResolvedValue({ docs: mockDocs });
 
     const result = await fetchCheckinsByUser("user-1");
     expect(result).toHaveLength(2);
@@ -241,7 +238,7 @@ describe("fetchCheckinsByUser", () => {
     expect(result[1].id).toBe("checkin-b");
   });
 
-  it("sorts correctly when first item has no createdAt", async () => {
+  it("returns Firestore snapshot order (no client re-sort)", async () => {
     const mockDocs = [
       {
         id: "checkin-x",
@@ -261,20 +258,16 @@ describe("fetchCheckinsByUser", () => {
       },
     ];
 
-    mockGetDocs.mockResolvedValue({
-      forEach: (cb: (item: any) => void) => mockDocs.forEach(cb),
-    });
+    mockGetDocs.mockResolvedValue({ docs: mockDocs });
 
     const result = await fetchCheckinsByUser("user-1");
     expect(result).toHaveLength(2);
-    expect(result[0].id).toBe("checkin-y");
-    expect(result[1].id).toBe("checkin-x");
+    expect(result[0].id).toBe("checkin-x");
+    expect(result[1].id).toBe("checkin-y");
   });
 
-  it("filters by lastDays option", async () => {
-    const now = Date.now();
-    const recent = new Date(now - 2 * 24 * 60 * 60 * 1000);
-    const old = new Date(now - 30 * 24 * 60 * 60 * 1000);
+  it("filters by lastDays via Firestore where on createdAt", async () => {
+    const recent = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
     const mockDocs = [
       {
         id: "recent",
@@ -284,20 +277,18 @@ describe("fetchCheckinsByUser", () => {
           createdAt: { toDate: () => recent },
         }),
       },
-      {
-        id: "old",
-        data: () => ({
-          userId: "user-1",
-          planId: "plan-1",
-          createdAt: { toDate: () => old },
-        }),
-      },
     ];
 
     mockGetDocs.mockResolvedValue({ docs: mockDocs });
 
     const result = await fetchCheckinsByUser("user-1", { lastDays: 7 });
 
+    expect(mockTimestampFromDate).toHaveBeenCalled();
+    expect(mockWhere).toHaveBeenCalledWith(
+      "createdAt",
+      ">=",
+      expect.objectContaining({ toDate: expect.any(Function) }),
+    );
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe("recent");
   });

@@ -1,15 +1,33 @@
+/**
+ * Seed plans into Firestore. Credentials via Application Default Credentials:
+ *   export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
+ * or FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY in .env.
+ *
+ * Never commit service account JSON files (see .gitignore).
+ */
 const admin = require("firebase-admin");
-const serviceAccount = require("../tertoct-prod.json"); // Caminho para o seu JSON
 
-// Inicializa com as credenciais reais, ignorando emuladores
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
+if (!admin.apps.length) {
+  const projectId =
+    process.env.FIREBASE_PROJECT_ID ||
+    process.env.GCLOUD_PROJECT ||
+    process.env.GOOGLE_CLOUD_PROJECT;
+
+  if (projectId) {
+    admin.initializeApp({ projectId });
+  } else {
+    admin.initializeApp();
+  }
+}
 
 const db = admin.firestore();
 
 async function seed() {
-  console.log("🚀 Enviando dados para o Firebase REAL...");
+  const target =
+    process.env.FIRESTORE_EMULATOR_HOST != null
+      ? "Firestore emulator"
+      : `Firebase project (${process.env.FIREBASE_PROJECT_ID || "ADC default"})`;
+  console.log(`🚀 Enviando planos para ${target}...`);
 
   const plans = [
     {
@@ -141,7 +159,7 @@ async function seed() {
   });
 
   await batch.commit();
-  console.log("✅ Planos criados com sucesso no banco de produção!");
+  console.log("✅ Planos criados com sucesso!");
   process.exit(0);
 }
 

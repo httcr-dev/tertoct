@@ -82,6 +82,18 @@ Permissions are enforced by Firestore rules and private API routes (`getPrivateR
 firebase deploy --only firestore:rules
 ```
 
+### Seed script (plans)
+
+Uses Application Default Credentials — never commit service account JSON (`*-prod.json` is gitignored).
+
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
+# or set FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY
+npm run seed
+```
+
+For the emulator: `export FIRESTORE_EMULATOR_HOST=localhost:8080` before `npm run seed`.
+
 ### Documentation
 
 - `docs/architecture.md` — system design, flows and API surface

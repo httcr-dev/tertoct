@@ -16,6 +16,7 @@ jest.mock("@/lib/auth/admin", () => ({
   getAdminFirestore: () => mockGetAdminFirestore(),
 }));
 
+import { getVerifyTokenOptions } from "./verifyTokenOptions";
 import {
   getPrivateRouteContext,
   requireRole,
@@ -71,9 +72,10 @@ describe("getPrivateRouteContext", () => {
       expect(result.context.role).toBe("coach");
       expect(result.context.session.uid).toBe("u1");
     }
-    expect(mockVerifyToken).toHaveBeenCalledWith("token-abc", {
-      checkRevoked: false,
-    });
+    expect(mockVerifyToken).toHaveBeenCalledWith(
+      "token-abc",
+      getVerifyTokenOptions(),
+    );
   });
 
   it("maps admin boolean claim to admin role", async () => {

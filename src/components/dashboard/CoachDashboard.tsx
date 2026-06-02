@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState, useRef, useCallback } from "react";
+import { useMemo, useState, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { CheckIn, Plan, StudentSummary } from "@/lib/types";
 import { filterStudents } from "@/lib/utils/studentFilter";
@@ -9,7 +9,6 @@ import {
   MUTATION_TOAST_MIN_MS,
   withMinDuration,
 } from "@/lib/utils/withMinDuration";
-import { getWeekStart } from "@/lib/utils/weekFilters";
 import toast from "react-hot-toast";
 import { useAuth } from "../auth/AuthProvider";
 
@@ -39,19 +38,12 @@ import {
 } from "@/services/userService";
 import { fetchCheckinsByUser } from "@/services/checkinService";
 import {
-  listenActiveClasses,
   createGymClass,
   updateGymClass,
   deleteGymClass,
 } from "@/services/classService";
 import type { GymClass } from "@/lib/types";
-import {
-  fetchRecentCheckinsSince,
-  listenCheckinCountsSince,
-  listenCoaches,
-  listenPlans,
-  listenStudents,
-} from "@/services/dashboardService";
+import { useCoachDashboardData } from "@/hooks/coach/useCoachDashboardData";
 
 type CoachTab =
   | "overview"
@@ -65,9 +57,6 @@ type CoachTab =
 export function CoachDashboard() {
   const { profile, signOutUser } = useAuth();
 
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [classes, setClasses] = useState<GymClass[]>([]);
-  const [students, setStudents] = useState<StudentSummary[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState("all");
   const [paymentFilter, setPaymentFilter] = useState("all");
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
@@ -98,91 +87,26 @@ export function CoachDashboard() {
   const [selectedTab, setSelectedTab] = useState<CoachTab>(
     initialTab && validTabs.includes(initialTab) ? initialTab : "overview",
   );
-  const [professors, setProfessors] = useState<StudentSummary[]>([]);
-  const [recentCheckins, setRecentCheckins] = useState<CheckIn[]>([]);
   const [selectedStudentIdForCheckins, setSelectedStudentIdForCheckins] =
     useState("all");
-  const [checkinCounts, setCheckinCounts] = useState<Map<string, number>>(
-    new Map(),
-  );
-  const [initialDataLoaded, setInitialDataLoaded] = useState({
-    plans: false,
-    classes: false,
-    students: false,
-    coaches: false,
-    checkins: false,
-    recent: false,
+
+  const {
+    plans,
+    classes,
+    students,
+    professors,
+    recentCheckins,
+    checkinCounts,
+    isBootstrapping,
+    professorsLoaded,
+  } = useCoachDashboardData({
+    loadProfessors: selectedTab === "professors",
   });
 
   const handleTabChange = useCallback((tab: CoachTab) => {
     setSelectedTab(tab);
     router.replace(`?tab=${tab}`, { scroll: false });
   }, [router]);
-
-  // ── Real-time listeners ──────────────────────────────────────────────
-  useEffect(() => {
-    const markLoaded = (key: keyof typeof initialDataLoaded) => {
-      setInitialDataLoaded((prev) => ({ ...prev, [key]: true }));
-    };
-    const emptyOnPermissionError = <T,>(
-      setter: (value: T) => void,
-      emptyValue: T,
-      key: keyof typeof initialDataLoaded,
-    ) => {
-      setter(emptyValue);
-      markLoaded(key);
-    };
-
-    const unsubPlans = listenPlans(
-      (next) => {
-        setPlans(next);
-        markLoaded("plans");
-      },
-      () => emptyOnPermissionError(setPlans, [], "plans"),
-    );
-    const unsubClasses = listenActiveClasses(
-      (next) => {
-        setClasses(next);
-        markLoaded("classes");
-      },
-      () => {
-        setClasses([]);
-        markLoaded("classes");
-      },
-    );
-    const unsubStudents = listenStudents(
-      (next) => {
-        setStudents(next);
-        markLoaded("students");
-      },
-      () => emptyOnPermissionError(setStudents, [], "students"),
-    );
-    const unsubProfessors = listenCoaches(
-      (next) => {
-        setProfessors(next);
-        markLoaded("coaches");
-      },
-      () => emptyOnPermissionError(setProfessors, [], "coaches"),
-    );
-
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const unsubMonthly = listenCheckinCountsSince(
-      thirtyDaysAgo,
-      (counts) => {
-        setCheckinCounts(counts);
-        markLoaded("checkins");
-      },
-      () => emptyOnPermissionError(setCheckinCounts, new Map(), "checkins"),
-    );
-
-    return () => {
-      unsubPlans();
-      unsubClasses();
-      unsubStudents();
-      unsubProfessors();
-      unsubMonthly();
-    };
-  }, []);
 
   // ── Derived data ─────────────────────────────────────────────────────
   const studentsWithCounts = useMemo(
@@ -194,26 +118,6 @@ export function CoachDashboard() {
     [students, checkinCounts],
   );
 
-
-  // Recent checkins (visão geral + aba Check-ins): desde segunda 00:00 da semana atual
-  useEffect(() => {
-    const loadRecent = async () => {
-      try {
-        const since = getWeekStart();
-        setRecentCheckins(await fetchRecentCheckinsSince(since));
-      } catch {
-        setRecentCheckins([]);
-      } finally {
-        setInitialDataLoaded((prev) => ({ ...prev, recent: true }));
-      }
-    };
-    loadRecent();
-  }, []);
-
-  const isBootstrapping = useMemo(
-    () => !Object.values(initialDataLoaded).every(Boolean),
-    [initialDataLoaded],
-  );
 
   // ── Plan handlers (delegated to service) ─────────────────────────────
   const scrollToEditPanel = useCallback(() => {
@@ -701,12 +605,15 @@ export function CoachDashboard() {
             />
           )}
 
-          {selectedTab === "professors" && (
-            <ProfessorsTab
-              professors={professors}
-              toggleStudentActive={toggleStudentActive}
-            />
-          )}
+          {selectedTab === "professors" &&
+            (!professorsLoaded ? (
+              <PageLoader message="Carregando professores..." fullScreen={false} />
+            ) : (
+              <ProfessorsTab
+                professors={professors}
+                toggleStudentActive={toggleStudentActive}
+              />
+            ))}
 
           {selectedTab === "students" && (
             <StudentsTab

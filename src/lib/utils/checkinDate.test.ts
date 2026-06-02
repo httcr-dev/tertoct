@@ -1,4 +1,5 @@
 import {
+  assertCheckinDateKeyAllowed,
   clampCheckinDateKey,
   getAllowedCheckinDateKeys,
   getDefaultCheckinDateKey,
@@ -59,5 +60,15 @@ describe("checkinDate", () => {
     const reference = gymDay("2026-05-14");
     expect(clampCheckinDateKey("2026-05-12", reference)).toBe("2026-05-14");
     expect(clampCheckinDateKey("2026-05-16", reference)).toBe("2026-05-15");
+  });
+
+  it("assertCheckinDateKeyAllowed rejects dates outside the work week window", () => {
+    const reference = gymDay("2026-05-14");
+    expect(() => assertCheckinDateKeyAllowed("2026-05-18", reference)).toThrow(
+      /não disponível/i,
+    );
+    expect(() =>
+      assertCheckinDateKeyAllowed("2026-05-15", reference),
+    ).not.toThrow();
   });
 });

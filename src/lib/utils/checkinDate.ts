@@ -94,6 +94,16 @@ export function getAllowedCheckinDateKeys(reference = new Date()): string[] {
   return keys;
 }
 
+/** Same rule as the student UI date picker (weekdays left in the current work week). */
+export function assertCheckinDateKeyAllowed(
+  classDateKey: string,
+  reference = new Date(),
+): void {
+  if (!getAllowedCheckinDateKeys(reference).includes(classDateKey)) {
+    throw new Error("Data não disponível para check-in.");
+  }
+}
+
 export function formatCheckinDateLabel(
   dateKey: string,
   todayKey = getTodayDateKey(),

@@ -189,7 +189,7 @@ Dashboard / private APIs
 
 * Firebase Auth on the client (`AuthProvider`, `useAuthSession`).
 * HTTPOnly cookie (`authToken`) for server/middleware/API.
-* `verifyToken` with `checkRevoked: false` in dev (ADC limitations); cryptographic expiry still enforced.
+* `verifyToken` with `checkRevoked` enabled in production (`getVerifyTokenOptions()`); disabled on emulators/dev unless `FIREBASE_CHECK_REVOKED=true`.
 * Cookie flags: `httpOnly`, `secure` (prod), `sameSite`.
 
 Client auth extras:

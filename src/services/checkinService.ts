@@ -1,12 +1,12 @@
 import {
   getDocs,
   onSnapshot,
+  orderBy,
   query,
+  Timestamp,
+  limit,
   type Unsubscribe,
   where,
-  type QuerySnapshot,
-  type QueryDocumentSnapshot,
-  type DocumentData,
 } from "firebase/firestore";
 import type { CheckIn } from "@/lib/types";
 import { checkinsCol } from "@/lib/firestore/refs";
@@ -61,29 +61,36 @@ export async function createCheckIn(
   }
 }
 
+const HISTORY_FETCH_CAP = 50;
+
 export async function fetchCheckinsByUser(
   userId: string,
   options?: { lastDays?: number },
 ): Promise<CheckIn[]> {
-  const q = query(checkinsCol(), where("userId", "==", userId));
-  const snap = await getDocs(q);
-  const history: CheckIn[] = [];
-  const maybeSnap = snap as Partial<QuerySnapshot<DocumentData>>;
-  if (Array.isArray(maybeSnap.docs)) {
-    history.push(...maybeSnap.docs.map(mapCheckin));
-  } else if (typeof maybeSnap.forEach === "function") {
-    maybeSnap.forEach((d: QueryDocumentSnapshot<DocumentData>) => {
-      history.push(mapCheckin(d));
-    });
-  }
-  // Sort locally to avoid needing a composite index
-  history.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-
   if (options?.lastDays != null) {
-    const since = Date.now() - options.lastDays * 24 * 60 * 60 * 1000;
-    return history.filter((c) => c.createdAt.getTime() >= since);
+    const since = new Date(
+      Date.now() - options.lastDays * 24 * 60 * 60 * 1000,
+    );
+    const q = query(
+      checkinsCol(),
+      where("userId", "==", userId),
+      where("createdAt", ">=", Timestamp.fromDate(since)),
+      orderBy("createdAt", "desc"),
+      limit(HISTORY_FETCH_CAP),
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(mapCheckin);
   }
-  return history;
+
+  const snap = await getDocs(
+    query(
+      checkinsCol(),
+      where("userId", "==", userId),
+      orderBy("createdAt", "desc"),
+      limit(HISTORY_FETCH_CAP),
+    ),
+  );
+  return snap.docs.map(mapCheckin);
 }
 
 export function listenCheckinsByUser(

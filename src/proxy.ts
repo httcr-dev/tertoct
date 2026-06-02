@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AUTH_COOKIE_NAME } from "@/lib/auth/cookies";
 import { verifyToken } from "@/lib/auth/verifyToken";
+import { getVerifyTokenOptions } from "@/lib/auth/verifyTokenOptions";
 import { isAuthorizedForPath } from "@/lib/auth/authorization";
 import {
   captureServerError,
@@ -166,7 +167,7 @@ export async function proxy(req: NextRequest) {
   }
 
   try {
-    const decodedToken = await verifyToken(authToken);
+    const decodedToken = await verifyToken(authToken, getVerifyTokenOptions());
     const authorized = isAuthorizedForPath(pathname, decodedToken);
 
     if (!authorized) {

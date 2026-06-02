@@ -14,6 +14,39 @@ const statusEvents = new Map<string, number[]>();
 const ALERT_WINDOW_MS = 5 * 60 * 1000;
 const ALERT_THRESHOLD = 20;
 
+let sentryInitAttempted = false;
+
+function tryCaptureSentry(error: unknown, context: LogContext): void {
+  const dsn = process.env.SENTRY_DSN;
+  if (!dsn) return;
+
+  void import("@sentry/nextjs")
+    .then((Sentry) => {
+      if (!sentryInitAttempted) {
+        sentryInitAttempted = true;
+        if (!Sentry.isInitialized?.()) {
+          Sentry.init({
+            dsn,
+            enabled: process.env.NODE_ENV === "production",
+            tracesSampleRate: 0,
+          });
+        }
+      }
+      Sentry.captureException(error, {
+        tags: {
+          route: context.route,
+          action: context.action,
+          errorCode: context.errorCode,
+        },
+        extra: context.details,
+        user: context.uid ? { id: context.uid } : undefined,
+      });
+    })
+    .catch(() => {
+      // Sentry is optional; never break request handling.
+    });
+}
+
 export function logServerEvent(level: LogLevel, context: LogContext): void {
   const payload = {
     route: context.route,
@@ -36,6 +69,7 @@ export function logServerEvent(level: LogLevel, context: LogContext): void {
 }
 
 export function captureServerError(error: unknown, context: LogContext): void {
+  tryCaptureSentry(error, context);
   logServerEvent("error", {
     ...context,
     details: {

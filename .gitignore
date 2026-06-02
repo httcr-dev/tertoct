@@ -50,6 +50,8 @@ next-env.d.ts
 
 service-key.json
 tertoct-prod.json
+*-prod.json
+*.serviceAccount.json
 
 
 .ai*

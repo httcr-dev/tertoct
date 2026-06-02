@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import type { DecodedIdToken } from "firebase-admin/auth";
 import { AUTH_COOKIE_NAME } from "@/lib/auth/cookies";
 import { verifyToken } from "@/lib/auth/verifyToken";
+import { getVerifyTokenOptions } from "@/lib/auth/verifyTokenOptions";
 import { getAdminFirestore } from "@/lib/auth/admin";
 
 export type PrivateRouteContext = {
@@ -25,10 +26,7 @@ export async function getPrivateRouteContext(): Promise<
   }
 
   try {
-    // We disable checkRevoked because verifying against the Firebase backend requires
-    // proper Service Account credentials which aren't set locally via ADC.
-    // The token is still cryptographically verified and enforced to its 1 hour lifespan.
-    const session = await verifyToken(token, { checkRevoked: false });
+    const session = await verifyToken(token, getVerifyTokenOptions());
 
     let role =
       typeof session.role === "string"

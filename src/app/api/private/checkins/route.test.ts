@@ -149,6 +149,22 @@ describe("POST /api/private/checkins", () => {
     expect(mock.getDoc("checkins", `${STUDENT_ID}_${CLASS_ID}_2026-06-05`)).toBeDefined();
   });
 
+  it("rejects check-in for a date outside the allowed work-week window", async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-06-03T20:00:00.000Z")); // quarta
+
+    const mock = createFirestoreMock(baseSeed());
+    mockGetAdminFirestore.mockReturnValue(mock.db);
+
+    const response = await postCheckin(
+      postBody({ classDateKey: "2026-06-08" }), // segunda seguinte
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(json.error).toMatch(/não disponível/i);
+  });
+
   it("rejects check-in when plan does not match user", async () => {
     const mock = createFirestoreMock(
       baseSeed({

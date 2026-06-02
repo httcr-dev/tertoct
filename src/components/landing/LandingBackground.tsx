@@ -4,7 +4,7 @@ export function LandingBackground() {
   return (
     <div className="fixed inset-0 z-0" aria-hidden>
       <Image
-        src="/BlessTraining_Boxe_2026-03-15_532.jpg"
+        src="/BlessTraining_Boxe_2026-03-15_532.webp"
         alt=""
         fill
         priority

@@ -1,6 +1,9 @@
 name: CI
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
@@ -43,6 +46,7 @@ jobs:
 
     env:
       FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+      SKIP_ENV_VALIDATION: "1"
 
     steps:
       - uses: actions/checkout@v4
@@ -62,7 +66,7 @@ jobs:
       - run: npm i -g firebase-tools
 
       - name: Run tests with emulator (mais estável)
-        run: firebase emulators:exec --only firestore "npm run test"
+        run: firebase emulators:exec --only firestore "npm run test:coverage"
 
   e2e:
     runs-on: ubuntu-latest
