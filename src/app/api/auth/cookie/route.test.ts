@@ -9,7 +9,7 @@ const mockCookies = jest.fn(async () => ({
 
 const mockVerifyToken = jest.fn();
 const mockGetClientIdentifier = jest.fn(async () => "127.0.0.1");
-const mockCheckRateLimit = jest.fn(async (...args: unknown[]) => {
+const mockCheckRateLimit = jest.fn((...args: unknown[]) => {
   void args;
   return { allowed: true, remaining: 29, retryAfterMs: 0 };
 });
@@ -26,8 +26,8 @@ jest.mock("@/lib/auth/clientIdentifier", () => ({
   getClientIdentifier: () => mockGetClientIdentifier(),
 }));
 
-jest.mock("@/lib/auth/rateLimit", () => ({
-  checkRateLimit: (...args: unknown[]) => mockCheckRateLimit(...args),
+jest.mock("@/lib/auth/rateLimitMemory", () => ({
+  checkRateLimitMemory: (...args: unknown[]) => mockCheckRateLimit(...args),
 }));
 
 jest.mock("@/lib/security/origin", () => ({
@@ -35,14 +35,14 @@ jest.mock("@/lib/security/origin", () => ({
 }));
 
 jest.mock("@/lib/auth/verifyTokenOptions", () => ({
-  getVerifyTokenOptions: () => ({ checkRevoked: false }),
+  getFastVerifyTokenOptions: () => ({ checkRevoked: false }),
 }));
 
 describe("POST /api/auth/cookie", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockVerifyToken.mockResolvedValue({ uid: "user-1" });
-    mockCheckRateLimit.mockResolvedValue({ allowed: true, remaining: 29, retryAfterMs: 0 });
+    mockCheckRateLimit.mockReturnValue({ allowed: true, remaining: 29, retryAfterMs: 0 });
   });
 
   it("returns 200 and sets cookie for valid token", async () => {
@@ -93,7 +93,7 @@ describe("POST /api/auth/cookie", () => {
   });
 
   it("returns 429 when global rate limit blocks request", async () => {
-    mockCheckRateLimit.mockResolvedValueOnce({ allowed: false, remaining: 0, retryAfterMs: 60_000 });
+    mockCheckRateLimit.mockReturnValueOnce({ allowed: false, remaining: 0, retryAfterMs: 60_000 });
     const { POST } = await import("./route");
     const request = new Request("http://localhost/api/auth/cookie", {
       method: "POST",
@@ -110,8 +110,8 @@ describe("POST /api/auth/cookie", () => {
 
   it("returns 429 when uid rate limit blocks request", async () => {
     mockCheckRateLimit
-      .mockResolvedValueOnce({ allowed: true, remaining: 29, retryAfterMs: 0 })
-      .mockResolvedValueOnce({ allowed: false, remaining: 0, retryAfterMs: 60_000 });
+      .mockReturnValueOnce({ allowed: true, remaining: 29, retryAfterMs: 0 })
+      .mockReturnValueOnce({ allowed: false, remaining: 0, retryAfterMs: 60_000 });
     const { POST } = await import("./route");
     const request = new Request("http://localhost/api/auth/cookie", {
       method: "POST",

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AUTH_COOKIE_NAME } from "@/lib/auth/cookies";
 import { verifyToken } from "@/lib/auth/verifyToken";
-import { getVerifyTokenOptions } from "@/lib/auth/verifyTokenOptions";
+import { getFastVerifyTokenOptions } from "@/lib/auth/verifyTokenOptions";
+import { encodeProxyAuthSession, PROXY_AUTH_SESSION_HEADER } from "@/lib/auth/proxySessionHeaders";
+import { timeAuthStep } from "@/lib/auth/authTiming";
 import { isAuthorizedForPath } from "@/lib/auth/authorization";
 import {
   captureServerError,
@@ -167,7 +169,9 @@ export async function proxy(req: NextRequest) {
   }
 
   try {
-    const decodedToken = await verifyToken(authToken, getVerifyTokenOptions());
+    const decodedToken = await timeAuthStep("proxy.verifyToken", () =>
+      verifyToken(authToken, getFastVerifyTokenOptions()),
+    );
     const authorized = isAuthorizedForPath(pathname, decodedToken);
 
     if (!authorized) {
@@ -180,6 +184,11 @@ export async function proxy(req: NextRequest) {
       });
       return forbiddenResponse(req, nonce);
     }
+
+    requestHeaders.set(
+      PROXY_AUTH_SESSION_HEADER,
+      encodeProxyAuthSession(decodedToken),
+    );
 
     return withSecurityHeaders(
       NextResponse.next({ request: { headers: requestHeaders } }),

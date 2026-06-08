@@ -1,12 +1,14 @@
 import { expect, type Page } from "@playwright/test";
-import { nextWeekdayDateKeyFromToday } from "./dates";
+import { nextAdvanceCheckinDateKeyInWorkWeek } from "./dates";
 
 /** Clica em check-in antecipado e espera confirmação (API + estado do botão). */
-export async function performAdvanceCheckin(
-  page: Page,
-  dayOffset = 1,
-): Promise<string> {
-  const targetDate = nextWeekdayDateKeyFromToday(dayOffset);
+export async function performAdvanceCheckin(page: Page): Promise<string> {
+  const targetDate = nextAdvanceCheckinDateKeyInWorkWeek();
+  if (!targetDate) {
+    throw new Error(
+      "No advance check-in date in the current work week (e.g. Friday afternoon)",
+    );
+  }
   await page.getByTestId(`student-checkin-date-${targetDate}`).click();
 
   const submit = page.getByTestId("student-checkin-submit");

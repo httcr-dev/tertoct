@@ -1,4 +1,6 @@
 import {
+  getFastVerifyTokenOptions,
+  getStrictVerifyTokenOptions,
   getVerifyTokenOptions,
   shouldVerifyRevokedToken,
 } from "./verifyTokenOptions";
@@ -7,7 +9,7 @@ describe("verifyTokenOptions", () => {
   const env = process.env;
 
   beforeEach(() => {
-    process.env = { ...env };
+    process.env = { ...env, NODE_ENV: "test" };
     delete process.env.FIREBASE_CHECK_REVOKED;
     delete process.env.FIRESTORE_EMULATOR_HOST;
     delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
@@ -27,9 +29,13 @@ describe("verifyTokenOptions", () => {
     expect(shouldVerifyRevokedToken()).toBe(false);
   });
 
-  it("exposes options for verifyToken", () => {
-    expect(getVerifyTokenOptions()).toEqual({
-      checkRevoked: shouldVerifyRevokedToken(),
-    });
+  it("uses fast verify by default for getVerifyTokenOptions", () => {
+    expect(getVerifyTokenOptions()).toEqual({ checkRevoked: false });
+    expect(getFastVerifyTokenOptions()).toEqual({ checkRevoked: false });
+  });
+
+  it("uses strict verify when revoked checks are enabled", () => {
+    process.env.FIREBASE_CHECK_REVOKED = "true";
+    expect(getStrictVerifyTokenOptions()).toEqual({ checkRevoked: true });
   });
 });

@@ -90,6 +90,14 @@ export function CoachDashboard() {
   const [selectedStudentIdForCheckins, setSelectedStudentIdForCheckins] =
     useState("all");
 
+  const tabsNeedingCheckinCounts: CoachTab[] = [
+    "overview",
+    "students",
+    "checkins",
+    "expirations",
+  ];
+  const tabsNeedingRecentCheckins: CoachTab[] = ["overview", "checkins"];
+
   const {
     plans,
     classes,
@@ -98,9 +106,13 @@ export function CoachDashboard() {
     recentCheckins,
     checkinCounts,
     isBootstrapping,
+    checkinCountsLoading,
+    recentCheckinsLoading,
     professorsLoaded,
   } = useCoachDashboardData({
     loadProfessors: selectedTab === "professors",
+    loadCheckinCounts: tabsNeedingCheckinCounts.includes(selectedTab),
+    loadRecentCheckins: tabsNeedingRecentCheckins.includes(selectedTab),
   });
 
   const handleTabChange = useCallback((tab: CoachTab) => {
@@ -564,14 +576,20 @@ export function CoachDashboard() {
             </div>
           </header>
 
-          {selectedTab === "overview" && (
-            <OverviewTab
-              students={students}
-              plans={plans}
-              recentCheckins={recentCheckins}
-              classes={classes}
-            />
-          )}
+          {selectedTab === "overview" &&
+            (recentCheckinsLoading || checkinCountsLoading ? (
+              <PageLoader
+                message="Carregando métricas..."
+                fullScreen={false}
+              />
+            ) : (
+              <OverviewTab
+                students={students}
+                plans={plans}
+                recentCheckins={recentCheckins}
+                classes={classes}
+              />
+            ))}
 
           {selectedTab === "plans" && (
             <PlansTab
@@ -615,30 +633,42 @@ export function CoachDashboard() {
               />
             ))}
 
-          {selectedTab === "students" && (
-            <StudentsTab
-              filteredStudents={filteredStudents}
-              selectedPlanId={selectedPlanId}
-              setSelectedPlanId={setSelectedPlanId}
-              paymentFilter={paymentFilter}
-              setPaymentFilter={setPaymentFilter}
-              plans={plans}
-              viewCheckins={viewCheckins}
-              handleAssignPlan={handleAssignPlan}
-              handleSetPaymentDay={handleSetPaymentDay}
-              handleTogglePayment={handleTogglePayment}
-            />
-          )}
+          {selectedTab === "students" &&
+            (checkinCountsLoading ? (
+              <PageLoader
+                message="Carregando alunos..."
+                fullScreen={false}
+              />
+            ) : (
+              <StudentsTab
+                filteredStudents={filteredStudents}
+                selectedPlanId={selectedPlanId}
+                setSelectedPlanId={setSelectedPlanId}
+                paymentFilter={paymentFilter}
+                setPaymentFilter={setPaymentFilter}
+                plans={plans}
+                viewCheckins={viewCheckins}
+                handleAssignPlan={handleAssignPlan}
+                handleSetPaymentDay={handleSetPaymentDay}
+                handleTogglePayment={handleTogglePayment}
+              />
+            ))}
 
-          {selectedTab === "checkins" && (
-            <CheckinsTab
-              recentCheckins={recentCheckins}
-              selectedStudentIdForCheckins={selectedStudentIdForCheckins}
-              setSelectedStudentIdForCheckins={setSelectedStudentIdForCheckins}
-              studentsWithCounts={studentsWithCounts}
-              classes={classes}
-            />
-          )}
+          {selectedTab === "checkins" &&
+            (recentCheckinsLoading || checkinCountsLoading ? (
+              <PageLoader
+                message="Carregando check-ins..."
+                fullScreen={false}
+              />
+            ) : (
+              <CheckinsTab
+                recentCheckins={recentCheckins}
+                selectedStudentIdForCheckins={selectedStudentIdForCheckins}
+                setSelectedStudentIdForCheckins={setSelectedStudentIdForCheckins}
+                studentsWithCounts={studentsWithCounts}
+                classes={classes}
+              />
+            ))}
 
           {selectedTab === "expirations" && (
             <ExpirationsTab

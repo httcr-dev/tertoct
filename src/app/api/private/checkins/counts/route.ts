@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getPrivateRouteContext, requireRole } from "@/lib/auth/privateRoute";
+import { getPrivateRouteContextFromRequest, requireRole } from "@/lib/auth/privateRoute";
 import { enforcePrivateApiRateLimit } from "@/lib/auth/privateApiRateLimit";
 import {
   aggregateCheckinCountsSince,
@@ -20,7 +20,7 @@ function parseDaysParam(raw: string | null): number {
 }
 
 export async function GET(req: Request) {
-  const auth = await getPrivateRouteContext();
+  const auth = await getPrivateRouteContextFromRequest(req);
   if (!auth.ok) return auth.response;
   const forbidden = requireRole(auth.context, ["coach", "admin"]);
   if (forbidden) return forbidden;

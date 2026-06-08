@@ -47,7 +47,9 @@ function toDate(value) {
 }
 
 function formatPtBr(d) {
-  return d.toLocaleDateString("pt-BR", { timeZone: process.env.TZ || "America/Sao_Paulo" });
+  return d.toLocaleDateString("pt-BR", {
+    timeZone: process.env.TZ || "America/Sao_Paulo",
+  });
 }
 
 async function sendWhatsAppMessageCloudApi(text) {
@@ -59,7 +61,9 @@ async function sendWhatsAppMessageCloudApi(text) {
 
   if (!token || !phoneNumberId) {
     // No credentials: keep as dry-run by design
-    console.log("[notify] Missing WHATSAPP_CLOUD_TOKEN/WHATSAPP_PHONE_NUMBER_ID (skipping send).");
+    console.log(
+      "[notify] Missing WHATSAPP_CLOUD_TOKEN/WHATSAPP_PHONE_NUMBER_ID (skipping send).",
+    );
     return;
   }
 
@@ -116,7 +120,10 @@ async function main() {
   plansSnap.forEach((d) => plansById.set(d.id, d.data()));
 
   // Students only
-  const usersSnap = await db.collection("users").where("role", "==", "student").get();
+  const usersSnap = await db
+    .collection("users")
+    .where("role", "==", "student")
+    .get();
 
   const expiring = [];
 
@@ -134,7 +141,10 @@ async function main() {
     if (!validUntil) return;
 
     const v = startOfDay(validUntil);
-    if (v.getTime() >= tomorrow.getTime() && v.getTime() < dayAfterTomorrow.getTime()) {
+    if (
+      v.getTime() >= tomorrow.getTime() &&
+      v.getTime() < dayAfterTomorrow.getTime()
+    ) {
       expiring.push({
         userId,
         name: u.name || null,
@@ -167,11 +177,12 @@ async function main() {
   }
 
   await sendWhatsAppMessageCloudApi(text);
-  console.log(`[notify] Sent WhatsApp message for ${expiring.length} student(s).`);
+  console.log(
+    `[notify] Sent WhatsApp message for ${expiring.length} student(s).`,
+  );
 }
 
 main().catch((err) => {
   console.error("[notify] Failed:", err?.message || err);
   process.exit(1);
 });
-

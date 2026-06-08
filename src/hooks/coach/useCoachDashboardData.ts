@@ -31,6 +31,8 @@ const emptyBootstrap: CoachBootstrapState = {
 
 type UseCoachDashboardDataOptions = {
   loadProfessors: boolean;
+  loadCheckinCounts: boolean;
+  loadRecentCheckins: boolean;
 };
 
 export function useCoachDashboardData(options: UseCoachDashboardDataOptions) {
@@ -83,7 +85,21 @@ export function useCoachDashboardData(options: UseCoachDashboardDataOptions) {
       () => emptyOnPermissionError(setStudents, [], "students"),
     );
 
+    return () => {
+      unsubPlans();
+      unsubClasses();
+      unsubStudents();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!options.loadCheckinCounts) return;
+
     let cancelled = false;
+    setBootstrap((prev) =>
+      prev.checkins ? prev : { ...prev, checkins: false },
+    );
+
     const loadCounts = async () => {
       try {
         const counts = await fetchCheckinCountsByCoach(30);
@@ -91,7 +107,9 @@ export function useCoachDashboardData(options: UseCoachDashboardDataOptions) {
       } catch {
         if (!cancelled) setCheckinCounts(new Map());
       } finally {
-        if (!cancelled) markLoaded("checkins");
+        if (!cancelled) {
+          setBootstrap((prev) => ({ ...prev, checkins: true }));
+        }
       }
     };
     void loadCounts();
@@ -108,11 +126,8 @@ export function useCoachDashboardData(options: UseCoachDashboardDataOptions) {
     return () => {
       cancelled = true;
       window.clearInterval(countsInterval);
-      unsubPlans();
-      unsubClasses();
-      unsubStudents();
     };
-  }, []);
+  }, [options.loadCheckinCounts]);
 
   useEffect(() => {
     if (!options.loadProfessors) return;
@@ -132,20 +147,39 @@ export function useCoachDashboardData(options: UseCoachDashboardDataOptions) {
   }, [options.loadProfessors]);
 
   useEffect(() => {
+    if (!options.loadRecentCheckins) return;
+
+    let cancelled = false;
+    setBootstrap((prev) =>
+      prev.recent ? prev : { ...prev, recent: false },
+    );
+
     const loadRecent = async () => {
       try {
         const since = getWeekStart();
-        setRecentCheckins(await fetchRecentCheckinsSince(since));
+        const next = await fetchRecentCheckinsSince(since);
+        if (!cancelled) setRecentCheckins(next);
       } catch {
-        setRecentCheckins([]);
+        if (!cancelled) setRecentCheckins([]);
       } finally {
-        setBootstrap((prev) => ({ ...prev, recent: true }));
+        if (!cancelled) {
+          setBootstrap((prev) => ({ ...prev, recent: true }));
+        }
       }
     };
     void loadRecent();
-  }, []);
 
-  const isBootstrapping = !Object.values(bootstrap).every(Boolean);
+    return () => {
+      cancelled = true;
+    };
+  }, [options.loadRecentCheckins]);
+
+  const isBootstrapping =
+    !bootstrap.plans || !bootstrap.classes || !bootstrap.students;
+  const checkinCountsLoading =
+    options.loadCheckinCounts && !bootstrap.checkins;
+  const recentCheckinsLoading =
+    options.loadRecentCheckins && !bootstrap.recent;
 
   return {
     plans,
@@ -155,6 +189,8 @@ export function useCoachDashboardData(options: UseCoachDashboardDataOptions) {
     recentCheckins,
     checkinCounts,
     isBootstrapping,
+    checkinCountsLoading,
+    recentCheckinsLoading,
     professorsLoaded,
   };
 }

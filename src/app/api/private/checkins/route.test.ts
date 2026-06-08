@@ -14,7 +14,7 @@ const mockEnforcePrivateApiRateLimit = jest.fn();
 const mockGetAdminFirestore = jest.fn();
 
 jest.mock("@/lib/auth/privateRoute", () => ({
-  getPrivateRouteContext: () => mockGetPrivateRouteContext(),
+  getPrivateRouteContextFromRequest: () => mockGetPrivateRouteContext(),
   requireRole: () => null,
 }));
 

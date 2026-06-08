@@ -1,71 +1,138 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { NextResponse } from "next/server";
 import type { DecodedIdToken } from "firebase-admin/auth";
 import { AUTH_COOKIE_NAME } from "@/lib/auth/cookies";
 import { verifyToken } from "@/lib/auth/verifyToken";
-import { getVerifyTokenOptions } from "@/lib/auth/verifyTokenOptions";
+import {
+  getFastVerifyTokenOptions,
+  getStrictVerifyTokenOptions,
+} from "@/lib/auth/verifyTokenOptions";
 import { getAdminFirestore } from "@/lib/auth/admin";
+import { timeAuthStep } from "@/lib/auth/authTiming";
+import {
+  decodeProxyAuthSession,
+  decodedTokenFromProxySession,
+  PROXY_AUTH_SESSION_HEADER,
+  roleFromProxySession,
+} from "@/lib/auth/proxySessionHeaders";
+import { getCachedUserRole, setCachedUserRole } from "@/lib/auth/roleCache";
 
 export type PrivateRouteContext = {
   session: DecodedIdToken;
   role: string | null;
 };
 
-export async function getPrivateRouteContext(): Promise<
+export type PrivateRouteContextOptions = {
+  /** When true, always verify the cookie token with revocation check. */
+  requireRevocationCheck?: boolean;
+};
+
+function roleFromSessionClaims(session: DecodedIdToken): string | null {
+  if (typeof session.role === "string") return session.role;
+  if (session.admin === true) return "admin";
+  if (session.coach === true) return "coach";
+  if (session.student === true) return "student";
+  return null;
+}
+
+async function resolveRoleFromFirestore(uid: string): Promise<string | null> {
+  const cached = getCachedUserRole(uid);
+  if (cached !== undefined) return cached;
+
+  try {
+    const db = getAdminFirestore();
+    const userDoc = await db.collection("users").doc(uid).get();
+    if (userDoc.exists) {
+      const data = userDoc.data();
+      if (data && typeof data.role === "string") {
+        setCachedUserRole(uid, data.role);
+        return data.role;
+      }
+    }
+    setCachedUserRole(uid, null);
+    return null;
+  } catch (err) {
+    console.warn("[privateRoute] Failed to fetch role from Firestore:", err);
+    return null;
+  }
+}
+
+async function resolveSessionAndRole(
+  token: string,
+  options: PrivateRouteContextOptions,
+): Promise<{ session: DecodedIdToken; jwtRole: string | null }> {
+  if (!options.requireRevocationCheck) {
+    const headerStore = await headers();
+    const proxySession = decodeProxyAuthSession(
+      headerStore.get(PROXY_AUTH_SESSION_HEADER),
+    );
+    if (proxySession) {
+      const session = decodedTokenFromProxySession(proxySession);
+      return {
+        session,
+        jwtRole: roleFromProxySession(proxySession),
+      };
+    }
+  }
+
+  const verifyOptions = options.requireRevocationCheck
+    ? getStrictVerifyTokenOptions()
+    : getFastVerifyTokenOptions();
+
+  const session = await verifyToken(token, verifyOptions);
+  return { session, jwtRole: roleFromSessionClaims(session) };
+}
+
+export async function getPrivateRouteContext(
+  options: PrivateRouteContextOptions = {},
+): Promise<
   | { ok: true; context: PrivateRouteContext }
   | { ok: false; response: NextResponse }
 > {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
+  return timeAuthStep("getPrivateRouteContext", async () => {
+    const cookieStore = await cookies();
+    const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
 
-  if (!token) {
-    return {
-      ok: false,
-      response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
-    };
-  }
-
-  try {
-    const session = await verifyToken(token, getVerifyTokenOptions());
-
-    let role =
-      typeof session.role === "string"
-        ? session.role
-        : session.admin === true
-          ? "admin"
-          : session.coach === true
-            ? "coach"
-            : session.student === true
-              ? "student"
-              : null;
-
-    // Firestore is authoritative when the profile exists (avoids stale JWT role claims).
-    if (session.uid) {
-      try {
-        const db = getAdminFirestore();
-        const userDoc = await db.collection("users").doc(session.uid).get();
-        if (userDoc.exists) {
-          const data = userDoc.data();
-          if (data && typeof data.role === "string") {
-            role = data.role;
-          }
-        }
-      } catch (err) {
-        console.warn(
-          "[privateRoute] Failed to fetch role from Firestore:",
-          err,
-        );
-      }
+    if (!token) {
+      return {
+        ok: false as const,
+        response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      };
     }
 
-    return { ok: true, context: { session, role } };
-  } catch (error) {
-    console.error("[privateRoute] Token verification failed:", error);
-    return {
-      ok: false,
-      response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
-    };
-  }
+    try {
+      const { session, jwtRole } = await resolveSessionAndRole(token, options);
+      let role = jwtRole;
+
+      if (session.uid) {
+        const firestoreRole = await resolveRoleFromFirestore(session.uid);
+        if (firestoreRole !== null) {
+          role = firestoreRole;
+        }
+      }
+
+      return { ok: true as const, context: { session, role } };
+    } catch (error) {
+      console.error("[privateRoute] Token verification failed:", error);
+      return {
+        ok: false as const,
+        response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      };
+    }
+  });
+}
+
+export async function getPrivateRouteContextFromRequest(
+  req: Request,
+  options: PrivateRouteContextOptions = {},
+): Promise<
+  | { ok: true; context: PrivateRouteContext }
+  | { ok: false; response: NextResponse }
+> {
+  const requireRevocationCheck =
+    options.requireRevocationCheck ??
+    !["GET", "HEAD", "OPTIONS"].includes(req.method.toUpperCase());
+  return getPrivateRouteContext({ ...options, requireRevocationCheck });
 }
 
 export function requireRole(

@@ -41,4 +41,28 @@ describe("checkinCancel", () => {
   it("formats class date key in pt-BR", () => {
     expect(formatClassDateKey("2026-05-19")).toMatch(/19\/05\/2026/);
   });
+
+  it("returns raw date key when format is invalid", () => {
+    expect(formatClassDateKey("invalid")).toBe("invalid");
+  });
+
+  it("derives class date key from createdAt when classDateKey is missing", () => {
+    const checkIn = { ...baseCheckIn, classDateKey: undefined as unknown as string };
+    expect(getCheckInCancelDeadline(checkIn, gymClass)).not.toBeNull();
+  });
+
+  it("returns null deadline when class timing is invalid", () => {
+    expect(
+      getCheckInCancelDeadline(
+        { ...baseCheckIn, classStartTime: "invalid" },
+        gymClass,
+      ),
+    ).toBeNull();
+    expect(
+      getCheckInCancelDeadline(
+        { ...baseCheckIn, classDateKey: "bad-date", classStartTime: undefined as unknown as string },
+        null,
+      ),
+    ).toBeNull();
+  });
 });

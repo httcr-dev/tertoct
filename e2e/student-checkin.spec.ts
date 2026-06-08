@@ -1,6 +1,10 @@
 import { test, expect } from "@playwright/test";
 import { performAdvanceCheckin } from "./helpers/checkin";
-import { nextWeekdayDateKeyFromToday, workWeekDateKeys } from "./helpers/dates";
+import {
+  dateKeyFromToday,
+  nextAdvanceCheckinDateKeyInWorkWeek,
+  workWeekDateKeys,
+} from "./helpers/dates";
 import {
   clearStudentCheckinData,
   fillWeeklyCheckinLimit,
@@ -24,6 +28,10 @@ test.describe("aluno — fluxo de check-in", () => {
   });
 
   test("check-in antecipado para próximo dia útil", async ({ page }) => {
+    test.skip(
+      !nextAdvanceCheckinDateKeyInWorkWeek(),
+      "Sem dia útil futuro na semana corrente (ex.: sexta-feira)",
+    );
     await page.goto("/dashboard?tab=checkin");
     await expect(page.getByTestId("student-logout")).toBeVisible({ timeout: 30_000 });
     await performAdvanceCheckin(page);
@@ -89,7 +97,8 @@ test.describe("aluno — fluxo de check-in", () => {
   });
 
   test("bloqueia check-in quando turma está lotada", async ({ page }) => {
-    const targetDate = nextWeekdayDateKeyFromToday(1);
+    const targetDate =
+      nextAdvanceCheckinDateKeyInWorkWeek() ?? dateKeyFromToday(0);
     await setClassFullForDate(targetDate);
     await page.goto("/dashboard?tab=checkin");
     await expect(page.getByTestId("student-logout")).toBeVisible({ timeout: 30_000 });
@@ -102,6 +111,10 @@ test.describe("aluno — fluxo de check-in", () => {
   });
 
   test("cancela check-in antecipado na visão geral", async ({ page }) => {
+    test.skip(
+      !nextAdvanceCheckinDateKeyInWorkWeek(),
+      "Sem dia útil futuro na semana corrente (ex.: sexta-feira)",
+    );
     await page.goto("/dashboard?tab=checkin");
     await expect(page.getByTestId("student-logout")).toBeVisible({ timeout: 30_000 });
     const targetDate = await performAdvanceCheckin(page);

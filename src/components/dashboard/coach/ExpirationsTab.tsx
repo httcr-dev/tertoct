@@ -44,7 +44,8 @@ export function ExpirationsTab({
     setSavingPhoneId(id);
     try {
       const student = students.find((s) => s.id === id);
-      const phoneValue = phoneInputs[id] !== undefined ? phoneInputs[id] : (student?.phone || "");
+      const phoneValue =
+        phoneInputs[id] !== undefined ? phoneInputs[id] : student?.phone || "";
       const phone = phoneValue.trim() || null;
       await toast.promise(
         withMinDuration(updateUserPhone(id, phone), MUTATION_TOAST_MIN_MS),
@@ -89,13 +90,18 @@ export function ExpirationsTab({
 
   const processedStudents = useMemo(() => {
     const today = new Date();
-    const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const todayOnly = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+    );
     return students
       .filter((s) => s.active !== false && s.paymentDueDay) // Only active students with due days
       .map((s) => {
         const dueDate = getEffectiveDueDate(s);
         let diffDays = 0;
-        let status: "due_tomorrow" | "expired" | "active" | "no_date" = "no_date";
+        let status: "due_tomorrow" | "expired" | "active" | "no_date" =
+          "no_date";
 
         if (dueDate) {
           diffDays = Math.round(
@@ -111,7 +117,8 @@ export function ExpirationsTab({
         }
 
         // Initialize phone input if not yet in state
-        const currentPhone = phoneInputs[s.id] !== undefined ? phoneInputs[s.id] : (s.phone || "");
+        const currentPhone =
+          phoneInputs[s.id] !== undefined ? phoneInputs[s.id] : s.phone || "";
 
         return {
           ...s,
@@ -160,7 +167,8 @@ export function ExpirationsTab({
       phoneNum = `55${phoneNum}`;
     }
 
-    const planName = plans.find((p) => p.id === student.planId)?.name || "seu plano";
+    const planName =
+      plans.find((p) => p.id === student.planId)?.name || "seu plano";
     let message = `Olá ${student.name?.split(" ")[0] || "Aluno"}, lembrando que a mensalidade do ${planName} `;
 
     if (student.status === "due_tomorrow") {
@@ -218,18 +226,19 @@ export function ExpirationsTab({
             const plan = plans.find((p) => p.id === student.planId);
             const isDueTomorrow = student.status === "due_tomorrow";
             const isExpired = student.status === "expired";
-            
+
             let statusClasses = "text-zinc-400";
-            if (isExpired) statusClasses = "text-red-400 bg-red-400/10 px-2 py-0.5 rounded";
-            else if (isDueTomorrow) statusClasses = "text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded font-medium";
+            if (isExpired)
+              statusClasses = "text-red-400 bg-red-400/10 px-2 py-0.5 rounded";
+            else if (isDueTomorrow)
+              statusClasses =
+                "text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded font-medium";
 
             return (
               <div
                 key={student.id}
                 className={`dashboard-card relative flex min-w-0 flex-col gap-4 p-4 transition-colors ${
-                  isDueTomorrow
-                    ? "dashboard-card-active"
-                    : ""
+                  isDueTomorrow ? "dashboard-card-active" : ""
                 }`}
               >
                 <div>
@@ -256,21 +265,26 @@ export function ExpirationsTab({
                       autoComplete="tel"
                       placeholder="DDD + número"
                       value={student.currentPhone}
-                      onChange={(e) => handlePhoneChange(student.id, e.target.value)}
+                      onChange={(e) =>
+                        handlePhoneChange(student.id, e.target.value)
+                      }
                       onFocus={(e) => scrollPhoneInputIntoView(e.currentTarget)}
                       className="min-w-0 flex-1 rounded-md border border-zinc-700 bg-black/50 px-3 py-2 text-base text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-amber-500 scroll-mb-28 scroll-mt-4 sm:py-1.5 sm:text-sm"
                     />
                     <button
                       type="button"
                       onClick={() => handleSavePhone(student.id)}
-                      disabled={savingPhoneId === student.id || student.currentPhone === (student.phone || "")}
+                      disabled={
+                        savingPhoneId === student.id ||
+                        student.currentPhone === (student.phone || "")
+                      }
                       className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-zinc-800 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-white disabled:opacity-50 sm:h-8 sm:w-8"
                       title="Salvar Telefone"
                     >
                       <Save className="h-4 w-4" />
                     </button>
                   </div>
-                  
+
                   <button
                     type="button"
                     onClick={() => sendWhatsApp(student)}
@@ -281,7 +295,7 @@ export function ExpirationsTab({
                     Cobrar no WhatsApp
                   </button>
                 </div>
-                
+
                 {isDueTomorrow && (
                   <div className="absolute right-0 top-0 h-16 w-16 overflow-hidden">
                     <div className="absolute top-4 -right-5 w-20 rotate-45 bg-amber-500/90 py-0.5 text-center text-[8px] font-bold text-black uppercase tracking-wider backdrop-blur-sm">
