@@ -40,6 +40,15 @@ export function dateKeyFromToday(dayOffset: number): string {
   return `${y}-${m}-${d}`;
 }
 
+/** First future weekday in the current work week (matches student allowed dates, excluding today). */
+export function nextAdvanceCheckinDateKeyInWorkWeek(
+  date = new Date(),
+): string | null {
+  const todayKey = localDateKey(date);
+  const weekKeys = workWeekDateKeys(date);
+  return weekKeys.find((key) => key > todayKey) ?? null;
+}
+
 /** Next Mon–Fri on or after `dayOffset` days from today. */
 export function nextWeekdayDateKeyFromToday(dayOffset = 1): string {
   for (let i = dayOffset; i < 14; i++) {

@@ -147,6 +147,30 @@ export async function setClassFullForDate(
     });
 }
 
+/** Insere um check-in do aluno E2E para exibir histórico/modal no coach. */
+export async function seedStudentCheckinForDate(
+  classDateKey: string,
+): Promise<void> {
+  const db = getDb();
+  const { studentUid, planId, classId } = E2E_IDS;
+  const weekKey = currentWeekIsoKey();
+  const now = Timestamp.now();
+
+  await db
+    .collection("checkins")
+    .doc(`${studentUid}_${classId}_${classDateKey}`)
+    .set({
+      userId: studentUid,
+      planId,
+      classId,
+      classDateKey,
+      className: E2E_LABELS.className,
+      classStartTime: "20:00",
+      weekKey,
+      createdAt: now,
+    });
+}
+
 /** Preenche limite semanal (3 check-ins) com documentos reais + contador. */
 export async function fillWeeklyCheckinLimit(): Promise<void> {
   const db = getDb();

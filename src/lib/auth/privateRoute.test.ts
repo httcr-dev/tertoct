@@ -1,11 +1,13 @@
 export {};
 
 const mockCookies = jest.fn();
+const mockHeaders = jest.fn();
 const mockVerifyToken = jest.fn();
 const mockGetAdminFirestore = jest.fn();
 
 jest.mock("next/headers", () => ({
   cookies: () => mockCookies(),
+  headers: () => mockHeaders(),
 }));
 
 jest.mock("@/lib/auth/verifyToken", () => ({
@@ -16,7 +18,12 @@ jest.mock("@/lib/auth/admin", () => ({
   getAdminFirestore: () => mockGetAdminFirestore(),
 }));
 
-import { getVerifyTokenOptions } from "./verifyTokenOptions";
+import { getFastVerifyTokenOptions } from "./verifyTokenOptions";
+import {
+  encodeProxyAuthSession,
+  PROXY_AUTH_SESSION_HEADER,
+} from "./proxySessionHeaders";
+import { clearRoleCache } from "./roleCache";
 import {
   getPrivateRouteContext,
   requireRole,
@@ -47,9 +54,13 @@ describe("requireRole", () => {
 describe("getPrivateRouteContext", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    clearRoleCache();
     mockCookies.mockResolvedValue({
       get: (name: string) =>
         name === "authToken" ? { value: "token-abc" } : undefined,
+    });
+    mockHeaders.mockResolvedValue({
+      get: () => null,
     });
     mockGetAdminFirestore.mockReturnValue({
       collection: () => ({
@@ -81,8 +92,25 @@ describe("getPrivateRouteContext", () => {
     }
     expect(mockVerifyToken).toHaveBeenCalledWith(
       "token-abc",
-      getVerifyTokenOptions(),
+      getFastVerifyTokenOptions(),
     );
+  });
+
+  it("uses proxy session header without re-verifying token", async () => {
+    const encoded = encodeProxyAuthSession({ uid: "u1", role: "coach" } as never);
+    mockHeaders.mockResolvedValueOnce({
+      get: (name: string) =>
+        name === PROXY_AUTH_SESSION_HEADER ? encoded : null,
+    });
+
+    const result = await getPrivateRouteContext();
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.context.role).toBe("coach");
+      expect(result.context.session.uid).toBe("u1");
+    }
+    expect(mockVerifyToken).not.toHaveBeenCalled();
   });
 
   it("maps admin boolean claim to admin role", async () => {
@@ -139,5 +167,94 @@ describe("getPrivateRouteContext", () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.response.status).toBe(401);
+  });
+
+  it("falls back to JWT role when Firestore role lookup fails", async () => {
+    mockVerifyToken.mockResolvedValueOnce({ uid: "u1", role: "coach" });
+    mockGetAdminFirestore.mockReturnValue({
+      collection: () => ({
+        doc: () => ({
+          get: async () => {
+            throw new Error("firestore unavailable");
+          },
+        }),
+      }),
+    });
+
+    const result = await getPrivateRouteContext();
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.context.role).toBe("coach");
+  });
+
+  it("uses strict verify for mutation requests", async () => {
+    const { getPrivateRouteContextFromRequest } = await import("./privateRoute");
+    const { getStrictVerifyTokenOptions } = await import("./verifyTokenOptions");
+    mockVerifyToken.mockResolvedValueOnce({ uid: "u1", role: "student" });
+
+    await getPrivateRouteContextFromRequest(
+      new Request("http://localhost/api/private/plans", { method: "POST" }),
+    );
+
+    expect(mockVerifyToken).toHaveBeenCalledWith(
+      "token-abc",
+      getStrictVerifyTokenOptions(),
+    );
+  });
+
+  it("uses fast verify for GET requests without proxy header", async () => {
+    const { getPrivateRouteContextFromRequest } = await import("./privateRoute");
+    mockVerifyToken.mockResolvedValueOnce({ uid: "u1", role: "student" });
+
+    await getPrivateRouteContextFromRequest(
+      new Request("http://localhost/api/private/checkins/counts", {
+        method: "GET",
+      }),
+    );
+
+    expect(mockVerifyToken).toHaveBeenCalledWith(
+      "token-abc",
+      getFastVerifyTokenOptions(),
+    );
+  });
+
+  it("ignores proxy header when requireRevocationCheck is true", async () => {
+    const encoded = encodeProxyAuthSession({ uid: "u1", role: "coach" } as never);
+    mockHeaders.mockResolvedValueOnce({
+      get: (name: string) =>
+        name === PROXY_AUTH_SESSION_HEADER ? encoded : null,
+    });
+    mockVerifyToken.mockResolvedValueOnce({ uid: "u1", role: "student" });
+
+    await getPrivateRouteContext({ requireRevocationCheck: true });
+
+    expect(mockVerifyToken).toHaveBeenCalledWith(
+      "token-abc",
+      (await import("./verifyTokenOptions")).getStrictVerifyTokenOptions(),
+    );
+  });
+
+  it("reuses cached Firestore role within TTL", async () => {
+    clearRoleCache();
+    const getMock = jest.fn(async () => ({
+      exists: true,
+      data: () => ({ role: "student" }),
+    }));
+    mockVerifyToken.mockResolvedValue({ uid: "u1", role: "coach" });
+    mockGetAdminFirestore.mockReturnValue({
+      collection: () => ({
+        doc: () => ({ get: getMock }),
+      }),
+    });
+
+    const first = await getPrivateRouteContext();
+    const second = await getPrivateRouteContext();
+
+    expect(first.ok && second.ok).toBe(true);
+    if (first.ok && second.ok) {
+      expect(first.context.role).toBe("student");
+      expect(second.context.role).toBe("student");
+    }
+    expect(getMock).toHaveBeenCalledTimes(1);
   });
 });

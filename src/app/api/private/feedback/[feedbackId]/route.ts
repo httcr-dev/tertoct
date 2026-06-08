@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminFirestore } from "@/lib/auth/admin";
 import { enforcePrivateApiRateLimit } from "@/lib/auth/privateApiRateLimit";
-import { getPrivateRouteContext } from "@/lib/auth/privateRoute";
+import { getPrivateRouteContextFromRequest } from "@/lib/auth/privateRoute";
 import { isTrustedMutationRequest } from "@/lib/security/origin";
 
 export const runtime = "nodejs";
@@ -14,7 +14,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Forbidden origin" }, { status: 403 });
   }
 
-  const auth = await getPrivateRouteContext();
+  const auth = await getPrivateRouteContextFromRequest(req);
   if (!auth.ok) return auth.response;
 
   const rateLimited = await enforcePrivateApiRateLimit(req, auth.context.session.uid);

@@ -40,6 +40,7 @@ import {
   refreshAuthClaimsFromServer,
   shouldRefreshAuthClaims,
 } from "@/lib/auth/clientRefreshClaims";
+import { markAuthTiming, timeAuthStep } from "@/lib/auth/authTiming";
 
 export type AuthSessionState = {
   firebaseUser: FirebaseUser | null;
@@ -78,6 +79,11 @@ export function useAuthSession(): AuthSessionState {
   const hasCookieRef = useRef(false);
   const userSessionSyncInFlightRef = useRef(0);
   const claimsSyncedUidRef = useRef<string | null>(null);
+  const profileRef = useRef<AppUserProfile | null>(null);
+
+  useEffect(() => {
+    profileRef.current = profile;
+  }, [profile]);
 
   const setPending = useCallback((pending: boolean) => {
     setAuthPending(pending);
@@ -123,96 +129,140 @@ export function useAuthSession(): AuthSessionState {
 
       const authEventId = ++authEventIdRef.current;
       setAuthError(null);
-      setLoading(true);
-      userSessionSyncInFlightRef.current += 1;
 
       try {
-        const tokenResult = await user.getIdTokenResult();
-        let syncState: CookieSyncState = {
+        const tokenResult = await timeAuthStep("sync.getIdTokenResult", () =>
+          user.getIdTokenResult(),
+        );
+        const syncState: CookieSyncState = {
           token: tokenResult.token,
           expiration: tokenResult.expirationTime,
         };
+        const needsCookieSync = shouldSyncCookie(
+          cookieSyncStateRef.current,
+          syncState,
+        );
+        const cachedProfile = profileRef.current;
 
-        if (shouldSyncCookie(cookieSyncStateRef.current, syncState)) {
-          syncState = await persistSessionCookie(tokenResult.token, syncState);
-          cookieSyncStateRef.current = syncState;
-          hasCookieRef.current = true;
-        }
-
-        const ensured = await ensureUserDocument(user);
-        if (authEventId !== authEventIdRef.current) return;
-
-        const needsClaims =
-          claimsSyncedUidRef.current !== user.uid ||
-          shouldRefreshAuthClaims(tokenResult.claims, ensured.role);
-
-        if (needsClaims) {
-          try {
-            const refreshed = await refreshAuthClaimsFromServer(user);
-            cookieSyncStateRef.current = refreshed;
-            hasCookieRef.current = true;
-            claimsSyncedUidRef.current = user.uid;
-          } catch (claimsError) {
-            if (isAuthRateLimitError(claimsError)) {
-              throw claimsError;
-            }
-            console.warn("[auth] Claims sync skipped:", claimsError);
-          }
-        }
-
-        clearPendingTimeout();
-        setPending(false);
-        setProfile(ensured);
-        setFirebaseUser(user);
-        finishAuthBootstrap();
-      } catch (error) {
-        console.error("Failed to ensure user document or set cookie", error);
-        if (authEventId !== authEventIdRef.current) return;
-
-        if (isAuthRateLimitError(error)) {
-          setAuthError(
-            "Muitas tentativas em pouco tempo. Aguarde cerca de 1 minuto e atualize a página.",
-          );
-          setProfile(null);
-          setFirebaseUser(user);
+        if (
+          !needsCookieSync &&
+          cachedProfile?.id === user.uid &&
+          claimsSyncedUidRef.current === user.uid &&
+          !shouldRefreshAuthClaims(tokenResult.claims, cachedProfile.role)
+        ) {
+          markAuthTiming("sync.fastPath", { uid: user.uid });
+          clearPendingTimeout();
           setPending(false);
+          setProfile(cachedProfile);
+          setFirebaseUser(user);
           finishAuthBootstrap();
           return;
         }
 
-        if (!isFatalAuthSessionError(error)) {
-          setAuthError(mapAuthError(error));
-          setFirebaseUser(user);
-          setPending(false);
-          finishAuthBootstrap();
-          return;
-        }
-
-        setAuthError(mapAuthError(error));
-        recoveringSessionRef.current = true;
-        cookieSyncStateRef.current = initialCookieSyncState;
-        claimsSyncedUidRef.current = null;
-        setFirebaseUser(null);
-        setProfile(null);
-        setPending(false);
-        finishAuthBootstrap();
-
-        if (hasCookieRef.current) {
-          hasCookieRef.current = false;
-          try {
-            await deleteAuthSessionCookie();
-          } catch {
-            /* best effort */
-          }
-        }
+        setLoading(true);
+        userSessionSyncInFlightRef.current += 1;
 
         try {
-          await signOut(auth);
+          const cookieTask = needsCookieSync
+            ? timeAuthStep("sync.persistCookie", () =>
+                persistSessionCookie(tokenResult.token, syncState),
+              ).then((next) => {
+                cookieSyncStateRef.current = next;
+                hasCookieRef.current = true;
+                return next;
+              })
+            : Promise.resolve(syncState);
+
+          const profileTask = timeAuthStep("sync.ensureUserDocument", () =>
+            ensureUserDocument(user),
+          );
+
+          const [, ensured] = await Promise.all([cookieTask, profileTask]);
+          if (authEventId !== authEventIdRef.current) return;
+
+          const needsClaims =
+            claimsSyncedUidRef.current !== user.uid ||
+            shouldRefreshAuthClaims(tokenResult.claims, ensured.role);
+
+          if (needsClaims) {
+            try {
+              const refreshed = await timeAuthStep("sync.refreshClaims", () =>
+                refreshAuthClaimsFromServer(user),
+              );
+              cookieSyncStateRef.current = refreshed;
+              hasCookieRef.current = true;
+              claimsSyncedUidRef.current = user.uid;
+            } catch (claimsError) {
+              if (isAuthRateLimitError(claimsError)) {
+                throw claimsError;
+              }
+              console.warn("[auth] Claims sync skipped:", claimsError);
+              claimsSyncedUidRef.current = user.uid;
+            }
+          } else {
+            claimsSyncedUidRef.current = user.uid;
+          }
+
+          clearPendingTimeout();
+          setPending(false);
+          setProfile(ensured);
+          setFirebaseUser(user);
+          finishAuthBootstrap();
+        } catch (error) {
+          console.error("Failed to ensure user document or set cookie", error);
+          if (authEventId !== authEventIdRef.current) return;
+
+          if (isAuthRateLimitError(error)) {
+            setAuthError(
+              "Muitas tentativas em pouco tempo. Aguarde cerca de 1 minuto e atualize a página.",
+            );
+            setProfile(null);
+            setFirebaseUser(user);
+            setPending(false);
+            finishAuthBootstrap();
+            return;
+          }
+
+          if (!isFatalAuthSessionError(error)) {
+            setAuthError(mapAuthError(error));
+            setFirebaseUser(user);
+            setPending(false);
+            finishAuthBootstrap();
+            return;
+          }
+
+          setAuthError(mapAuthError(error));
+          recoveringSessionRef.current = true;
+          cookieSyncStateRef.current = initialCookieSyncState;
+          claimsSyncedUidRef.current = null;
+          setFirebaseUser(null);
+          setProfile(null);
+          setPending(false);
+          finishAuthBootstrap();
+
+          if (hasCookieRef.current) {
+            hasCookieRef.current = false;
+            try {
+              await deleteAuthSessionCookie();
+            } catch {
+              /* best effort */
+            }
+          }
+
+          try {
+            await signOut(auth);
+          } finally {
+            recoveringSessionRef.current = false;
+          }
         } finally {
-          recoveringSessionRef.current = false;
+          userSessionSyncInFlightRef.current -= 1;
         }
-      } finally {
-        userSessionSyncInFlightRef.current -= 1;
+      } catch (error) {
+        console.error("Failed to read auth token", error);
+        if (authEventId !== authEventIdRef.current) return;
+        setAuthError(mapAuthError(error));
+        setPending(false);
+        finishAuthBootstrap();
       }
     };
 
@@ -221,6 +271,7 @@ export function useAuthSession(): AuthSessionState {
 
       cookieSyncStateRef.current = initialCookieSyncState;
       claimsSyncedUidRef.current = null;
+      profileRef.current = null;
       setProfile(null);
       setFirebaseUser(null);
 
@@ -330,7 +381,23 @@ export function useAuthSession(): AuthSessionState {
   const signOutUser = useCallback(async () => {
     userSessionSyncInFlightRef.current = 0;
     claimsSyncedUidRef.current = null;
-    await signOut(getFirebaseAuth());
+    cookieSyncStateRef.current = initialCookieSyncState;
+    hasCookieRef.current = false;
+    profileRef.current = null;
+
+    setProfile(null);
+    setFirebaseUser(null);
+    setAuthError(null);
+    setPending(false);
+    setLoading(false);
+    setAuthReady(true);
+
+    void deleteAuthSessionCookie().catch(() => {
+      /* best effort */
+    });
+    void signOut(getFirebaseAuth()).catch((error) => {
+      console.error("Background signOut failed:", error);
+    });
   }, []);
 
   return {

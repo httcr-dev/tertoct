@@ -4,7 +4,7 @@ const mockGetPrivateRouteContext = jest.fn();
 const mockSyncCustomClaims = jest.fn();
 
 jest.mock("@/lib/auth/privateRoute", () => ({
-  getPrivateRouteContext: () => mockGetPrivateRouteContext(),
+  getPrivateRouteContextFromRequest: () => mockGetPrivateRouteContext(),
 }));
 
 jest.mock("@/lib/auth/customClaims", () => ({

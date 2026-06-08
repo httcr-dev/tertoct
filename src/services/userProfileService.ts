@@ -66,7 +66,10 @@ export async function ensureUserDocument(user: User): Promise<AppUserProfile> {
   }
 
   const role = data.role ?? "student";
-  if (role === "coach" || role === "admin") {
+  if (
+    (role === "coach" || role === "admin") &&
+    Object.keys(updates).length > 0
+  ) {
     await setDoc(
       publicProfileRef,
       {

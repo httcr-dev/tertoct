@@ -36,4 +36,22 @@ describe("UserUpdateSchema", () => {
   it("allows partial profile update", () => {
     expect(UserUpdateSchema.parse({ active: false })).toEqual({ active: false });
   });
+
+  it("preserves null optional fields without stripHtml", () => {
+    expect(
+      UserUpdateSchema.parse({ planId: null, phone: null }),
+    ).toEqual({ planId: null, phone: null });
+  });
+
+  it("sanitizes optional planId and phone when present", () => {
+    expect(
+      UserUpdateSchema.parse({
+        planId: "plan-1",
+        phone: "11999999999",
+      }),
+    ).toEqual({
+      planId: "plan-1",
+      phone: "11999999999",
+    });
+  });
 });

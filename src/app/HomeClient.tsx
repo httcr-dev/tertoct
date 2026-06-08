@@ -23,10 +23,8 @@ export function HomeClient({
   initialCoaches: CoachCardData[];
 }) {
   const router = useRouter();
-  const { firebaseUser, authError, signInWithGoogle, loading, authPending, authReady } =
+  const { firebaseUser, authError, signInWithGoogle, authPending, authReady } =
     useAuth();
-
-  const sessionLoading = !authReady || loading || authPending;
 
   useEffect(() => {
     if (authReady && firebaseUser) {
@@ -34,43 +32,45 @@ export function HomeClient({
     }
   }, [authReady, firebaseUser, router]);
 
-  if (sessionLoading) {
+  if (firebaseUser) {
     return (
       <div className="relative min-h-screen overflow-x-hidden bg-black font-sans text-zinc-50">
-        <PageLoader message="Carregando..." />
+        <PageLoader message="Redirecionando..." />
+      </div>
+    );
+  }
+
+  if (authPending) {
+    return (
+      <div className="relative min-h-screen overflow-x-hidden bg-black font-sans text-zinc-50">
+        <PageLoader message="Entrando..." />
       </div>
     );
   }
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-black font-sans text-zinc-50">
-      {firebaseUser && <PageLoader message="Redirecionando..." />}
+      <LandingBackground />
 
-      {!firebaseUser && (
-        <>
-          <LandingBackground />
+      <main className="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col px-3 pb-6 pt-3 sm:px-4 sm:pb-8 sm:pt-4 lg:px-8">
+        <LandingHeader onSignIn={signInWithGoogle} />
 
-          <main className="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col px-3 pb-6 pt-3 sm:px-4 sm:pb-8 sm:pt-4 lg:px-8">
-            <LandingHeader onSignIn={signInWithGoogle} />
+        <LandingHero onSignIn={signInWithGoogle} authError={authError} />
 
-            <LandingHero onSignIn={signInWithGoogle} authError={authError} />
+        <LandingDivider className="mb-2 opacity-80 sm:mb-4" />
 
-            <LandingDivider className="mb-2 opacity-80 sm:mb-4" />
+        <PlansSection plans={initialPlans} loadingLandingData={false} />
 
-            <PlansSection plans={initialPlans} loadingLandingData={false} />
+        <LandingDivider className="my-6 opacity-60 sm:my-8" />
 
-            <LandingDivider className="my-6 opacity-60 sm:my-8" />
+        <CoachesSection coaches={initialCoaches} />
 
-            <CoachesSection coaches={initialCoaches} />
+        <LandingDivider className="my-6 opacity-60 sm:my-8" />
 
-            <LandingDivider className="my-6 opacity-60 sm:my-8" />
+        <FeedbackWall />
 
-            <FeedbackWall />
-
-            <LandingContact />
-          </main>
-        </>
-      )}
+        <LandingContact />
+      </main>
     </div>
   );
 }

@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { AUTH_COOKIE_NAME, getAuthCookieOptions } from "@/lib/auth/cookies";
 import { getClientIdentifier } from "@/lib/auth/clientIdentifier";
-import { checkRateLimit } from "@/lib/auth/rateLimit";
+import { checkRateLimitMemory } from "@/lib/auth/rateLimitMemory";
 import { verifyToken } from "@/lib/auth/verifyToken";
-import { getVerifyTokenOptions } from "@/lib/auth/verifyTokenOptions";
+import { getFastVerifyTokenOptions } from "@/lib/auth/verifyTokenOptions";
+import { timeAuthStep } from "@/lib/auth/authTiming";
 import { buildAuthRateLimitKey } from "@/lib/auth/rateLimitKey";
 import {
   getMutationOriginDetails,
@@ -54,7 +55,7 @@ export async function POST(req: Request) {
   }
   const ip = await getClientIdentifier();
   try {
-    const limit = await checkRateLimit(
+    const limit = checkRateLimitMemory(
       buildAuthRateLimitKey({
         route: "auth-cookie",
         method: "POST",
@@ -95,11 +96,11 @@ export async function POST(req: Request) {
       );
     }
 
+    const token = payload.token.trim();
     let decodedUid: string | null = null;
     try {
-      const decoded = await verifyToken(
-        payload.token,
-        getVerifyTokenOptions(),
+      const decoded = await timeAuthStep("cookie.verifyToken", () =>
+        verifyToken(token, getFastVerifyTokenOptions()),
       );
       decodedUid = decoded.uid;
     } catch (error) {
@@ -117,7 +118,7 @@ export async function POST(req: Request) {
     }
 
     if (decodedUid) {
-      const uidLimit = await checkRateLimit(
+      const uidLimit = checkRateLimitMemory(
         buildAuthRateLimitKey({
           route: "auth-cookie",
           method: "POST",
@@ -142,7 +143,7 @@ export async function POST(req: Request) {
     }
 
     const cookieStore = await cookies();
-    cookieStore.set(AUTH_COOKIE_NAME, payload.token, getAuthCookieOptions());
+    cookieStore.set(AUTH_COOKIE_NAME, token, getAuthCookieOptions());
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -183,7 +184,7 @@ export async function DELETE(req: Request) {
       );
     }
     const ip = await getClientIdentifier();
-    const limit = await checkRateLimit(
+    const limit = checkRateLimitMemory(
       buildAuthRateLimitKey({
         route: "auth-cookie",
         method: "DELETE",

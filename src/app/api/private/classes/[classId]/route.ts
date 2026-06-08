@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAdminFirestore } from "@/lib/auth/admin";
 import { enforcePrivateApiRateLimit } from "@/lib/auth/privateApiRateLimit";
-import { getPrivateRouteContext, requireRole } from "@/lib/auth/privateRoute";
+import { getPrivateRouteContextFromRequest, requireRole } from "@/lib/auth/privateRoute";
 import { validateBody } from "@/lib/validations/validateRoute";
 import { isTrustedMutationRequest } from "@/lib/security/origin";
 import { parseHHmm } from "@/lib/utils/time";
@@ -26,7 +26,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Forbidden origin" }, { status: 403 });
   }
 
-  const auth = await getPrivateRouteContext();
+  const auth = await getPrivateRouteContextFromRequest(req);
   if (!auth.ok) return auth.response;
   const forbidden = requireRole(auth.context, ["coach", "admin"]);
   if (forbidden) return forbidden;
@@ -80,7 +80,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Forbidden origin" }, { status: 403 });
   }
 
-  const auth = await getPrivateRouteContext();
+  const auth = await getPrivateRouteContextFromRequest(req);
   if (!auth.ok) return auth.response;
   const forbidden = requireRole(auth.context, ["coach", "admin"]);
   if (forbidden) return forbidden;

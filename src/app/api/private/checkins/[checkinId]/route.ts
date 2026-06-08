@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminFirestore } from "@/lib/auth/admin";
 import { enforcePrivateApiRateLimit } from "@/lib/auth/privateApiRateLimit";
-import { getPrivateRouteContext, requireRole } from "@/lib/auth/privateRoute";
+import { getPrivateRouteContextFromRequest, requireRole } from "@/lib/auth/privateRoute";
 import { isTrustedMutationRequest } from "@/lib/security/origin";
 import { canCancelCheckIn } from "@/lib/utils/checkinCancel";
 import { parseHHmm } from "@/lib/utils/time";
@@ -15,7 +15,7 @@ export async function DELETE(req: Request, context: RouteContext) {
     return NextResponse.json({ error: "Forbidden origin" }, { status: 403 });
   }
 
-  const auth = await getPrivateRouteContext();
+  const auth = await getPrivateRouteContextFromRequest(req);
   if (!auth.ok) return auth.response;
   const forbidden = requireRole(auth.context, ["student"]);
   if (forbidden) return forbidden;

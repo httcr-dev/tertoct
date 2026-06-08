@@ -3,8 +3,13 @@ import { E2E_LABELS } from "./constants";
 import { coachSidebar } from "./helpers/dashboard";
 import { performAdvanceCheckin } from "./helpers/checkin";
 import {
+  dateKeyFromToday,
+  nextAdvanceCheckinDateKeyInWorkWeek,
+} from "./helpers/dates";
+import {
   clearStudentCheckinData,
   resetE2eStudentState,
+  seedStudentCheckinForDate,
 } from "./helpers/emulator";
 
 test.describe.configure({ mode: "serial" });
@@ -24,6 +29,10 @@ test.describe("coach — acompanhamento de check-ins", () => {
     page,
     browser,
   }) => {
+    test.skip(
+      !nextAdvanceCheckinDateKeyInWorkWeek(),
+      "Sem dia útil futuro na semana corrente (ex.: sexta-feira)",
+    );
     const studentContext = await browser.newContext({
       storageState: "e2e/.auth/student.json",
     });
@@ -53,6 +62,10 @@ test.describe("coach — acompanhamento de check-ins", () => {
   });
 
   test("abre histórico de check-ins do aluno na gestão", async ({ page }) => {
+    const targetDate =
+      nextAdvanceCheckinDateKeyInWorkWeek() ?? dateKeyFromToday(0);
+    await seedStudentCheckinForDate(targetDate);
+
     await page.goto("/dashboard?tab=students");
     await expect(page.locator("header h1")).toHaveText("Alunos", {
       timeout: 30_000,
