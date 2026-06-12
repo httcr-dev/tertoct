@@ -11,3 +11,16 @@ export const PlanSchema = z.object({
 
 export const PlanCreateSchema = PlanSchema;
 export const PlanUpdateSchema = PlanSchema.partial();
+
+/** API route schema (active optional, classesPerWeek capped at 14). */
+export const PlanCreateApiSchema = z.object({
+  name: z.string().trim().min(1).max(100).transform(stripHtml),
+  price: z.number().finite().min(0),
+  classesPerWeek: z.number().int().min(1).max(14),
+  description: z
+    .string()
+    .max(500)
+    .optional()
+    .transform((val) => (val ? sanitizeHtml(val) : val)),
+  active: z.boolean().optional(),
+});

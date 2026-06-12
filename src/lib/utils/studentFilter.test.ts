@@ -104,6 +104,46 @@ describe("filterStudents — paymentFilter", () => {
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe("valid");
   });
+
+  it("'active' includes paid students without paymentValidUntil metadata", () => {
+    const paidNoValidUntil = makeStudent({
+      id: "paid-no-until",
+      paymentDueDay: 10,
+      monthlyPaymentPaid: true,
+    });
+    const result = filterStudents([paidNoValidUntil], {
+      selectedPlanId: "all",
+      paymentFilter: "active",
+    });
+    expect(result).toHaveLength(1);
+  });
+
+  it("returns empty for unknown payment filter values", () => {
+    const paid = makeStudent({
+      id: "paid",
+      paymentDueDay: 10,
+      monthlyPaymentPaid: true,
+    });
+    const result = filterStudents([paid], {
+      selectedPlanId: "all",
+      paymentFilter: "unknown",
+    });
+    expect(result).toHaveLength(0);
+  });
+
+  it("uses active flag from student summary when filtering overdue", () => {
+    const inactive = makeStudent({
+      id: "inactive",
+      active: false,
+      paymentDueDay: 10,
+      monthlyPaymentPaid: false,
+    });
+    const result = filterStudents([inactive], {
+      selectedPlanId: "all",
+      paymentFilter: "pending",
+    });
+    expect(result).toHaveLength(1);
+  });
 });
 
 describe("filterStudents — combined filters", () => {

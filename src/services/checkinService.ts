@@ -11,6 +11,7 @@ import {
 import type { CheckIn } from "@/lib/types";
 import { checkinsCol } from "@/lib/firestore/refs";
 import { mapCheckin } from "@/lib/firestore/mappers";
+import { parseApiErrorMessage } from "@/lib/utils/parseApiError";
 
 export async function cancelCheckIn(checkinId: string): Promise<void> {
   const response = await fetch(
@@ -18,14 +19,7 @@ export async function cancelCheckIn(checkinId: string): Promise<void> {
     { method: "DELETE" },
   );
   if (!response.ok) {
-    let message = "Falha ao cancelar check-in";
-    try {
-      const body = (await response.json()) as { error?: string };
-      if (body?.error) message = body.error;
-    } catch {
-      // ignore
-    }
-    throw new Error(message);
+    throw new Error(await parseApiErrorMessage(response, "Falha ao cancelar check-in"));
   }
 }
 
@@ -50,14 +44,7 @@ export async function createCheckIn(
     body: JSON.stringify(body),
   });
   if (!response.ok) {
-    let message = "Falha no check-in";
-    try {
-      const body = (await response.json()) as { error?: string };
-      if (body?.error) message = body.error;
-    } catch {
-      // ignore
-    }
-    throw new Error(message);
+    throw new Error(await parseApiErrorMessage(response, "Falha no check-in"));
   }
 }
 
@@ -98,14 +85,17 @@ export function listenCheckinsByUser(
   onData: (checkins: CheckIn[]) => void,
   onError?: (error: unknown) => void,
 ): Unsubscribe {
-  const q = query(checkinsCol(), where("userId", "==", userId));
+  const q = query(
+    checkinsCol(),
+    where("userId", "==", userId),
+    orderBy("createdAt", "desc"),
+    limit(HISTORY_FETCH_CAP),
+  );
 
   return onSnapshot(
     q,
     (snap) => {
-      const next = snap.docs.map(mapCheckin);
-      next.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-      onData(next);
+      onData(snap.docs.map(mapCheckin));
     },
     onError,
   );

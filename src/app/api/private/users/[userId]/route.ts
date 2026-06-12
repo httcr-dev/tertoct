@@ -40,10 +40,7 @@ export async function PATCH(
   const auth = await getPrivateRouteContextFromRequest(req);
   if (!auth.ok) return auth.response;
   const forbidden = requireRole(auth.context, ["coach", "admin"]);
-  if (forbidden) {
-    console.warn("[users PATCH] 403 Forbidden. User context:", auth.context);
-    return forbidden;
-  }
+  if (forbidden) return forbidden;
 
   const rateLimited = await enforcePrivateApiRateLimit(req, auth.context.session.uid);
   if (rateLimited) return rateLimited;
@@ -61,6 +58,10 @@ export async function PATCH(
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
   const current = snap.data() ?? {};
+
+  if (current.role !== "student") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   if (data.action === "assign-plan") {
     if (data.planId === null) {
@@ -125,16 +126,7 @@ export async function PATCH(
 
   if (data.action === "toggle-active") {
     const isCurrentlyActive = current.active !== false;
-    const newActive = !isCurrentlyActive;
-    await ref.update({ active: newActive });
-    
-    if (current.role === "coach" || current.role === "admin") {
-      await getAdminFirestore()
-        .collection("publicProfiles")
-        .doc(userId)
-        .set({ active: newActive }, { merge: true });
-    }
-    
+    await ref.update({ active: !isCurrentlyActive });
     return NextResponse.json({ success: true });
   }
 

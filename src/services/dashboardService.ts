@@ -1,15 +1,13 @@
 import {
-  getDocs,
   onSnapshot,
   orderBy,
   query,
-  Timestamp,
   where,
   type Unsubscribe,
 } from "firebase/firestore";
 import type { CheckIn, Plan, StudentSummary } from "@/lib/types";
-import { mapCheckin, mapPlan } from "@/lib/firestore/mappers";
-import { checkinsCol, plansCol, publicProfilesCol, usersCol } from "@/lib/firestore/refs";
+import { mapPlan, mapStudentSummary } from "@/lib/firestore/mappers";
+import { plansCol, publicProfilesCol, usersCol } from "@/lib/firestore/refs";
 
 type SnapshotErrorHandler = (error: unknown) => void;
 
@@ -33,23 +31,7 @@ export function listenStudents(
   return onSnapshot(
     query(usersCol(), where("role", "==", "student")),
     (snap) => {
-      const next: StudentSummary[] = snap.docs.map((docSnap) => {
-        const data = docSnap.data();
-        return {
-          id: docSnap.id,
-          name: data.name ?? null,
-          email: data.email ?? null,
-          phone: data.phone ?? null,
-          photoURL: data.photoURL ?? null,
-          planId: data.planId ?? null,
-          weeklyCheckIns: 0,
-          paymentDueDay: data.paymentDueDay ?? null,
-          monthlyPaymentPaid: data.monthlyPaymentPaid ?? false,
-          paymentValidUntil: data.paymentValidUntil ?? null,
-          ...(data.active !== undefined ? { active: !!data.active } : {}),
-        };
-      });
-      onData(next);
+      onData(snap.docs.map((docSnap) => mapStudentSummary(docSnap)));
     },
     onError,
   );
@@ -106,109 +88,53 @@ export function getCoachCheckinCountsPollIntervalMs(): number {
   return COACH_COUNTS_POLL_MS;
 }
 
-export function listenCheckinCountsSince(
-  since: Date,
-  onData: (counts: Map<string, number>) => void,
-  onError?: SnapshotErrorHandler,
-): Unsubscribe {
-  return onSnapshot(
-    query(checkinsCol(), where("createdAt", ">=", Timestamp.fromDate(since))),
-    (snap) => {
-      const counts = new Map<string, number>();
-      snap.forEach((d) => {
-        const uid = d.data().userId;
-        if (uid) counts.set(uid, (counts.get(uid) ?? 0) + 1);
-      });
-      onData(counts);
-    },
-    onError,
+type CoachCheckinsQuery = {
+  since?: Date;
+  days?: number;
+  classDateKeys?: string[];
+};
+
+async function fetchCoachCheckinsFromApi(
+  query: CoachCheckinsQuery,
+): Promise<CheckIn[]> {
+  const params = new URLSearchParams();
+  if (query.since) {
+    params.set("since", query.since.toISOString());
+  } else if (query.days != null) {
+    params.set("days", String(query.days));
+  }
+  if (query.classDateKeys && query.classDateKeys.length > 0) {
+    params.set("classDateKeys", query.classDateKeys.join(","));
+  }
+
+  const response = await fetch(
+    `/api/private/checkins/recent?${params.toString()}`,
+    { credentials: "include" },
   );
+  if (!response.ok) {
+    throw new Error("Failed to load check-ins");
+  }
+  const body = (await response.json()) as {
+    checkins?: Array<CheckIn & { createdAt: string }>;
+  };
+  if (!Array.isArray(body.checkins)) return [];
+  return body.checkins.map((item) => ({
+    ...item,
+    createdAt: new Date(item.createdAt),
+  }));
 }
 
+/** Coach dashboard: check-ins since `since` via private API. */
 export async function fetchRecentCheckinsSince(since: Date): Promise<CheckIn[]> {
-  const snap = await getDocs(
-    query(
-      checkinsCol(),
-      where("createdAt", ">=", Timestamp.fromDate(since)),
-      orderBy("createdAt", "desc"),
-    ),
-  );
-  return snap.docs.map(mapCheckin);
+  return fetchCoachCheckinsFromApi({ since });
 }
 
-/**
- * Fetches check-ins within a specific date range based on createdAt
- */
-export async function fetchCheckinsByDateRange(
-  startDate: Date,
-  endDate: Date,
+/** Coach dashboard: current business week check-ins via private API. */
+export async function fetchCurrentWeekCheckins(
+  classDateKeys: string[],
 ): Promise<CheckIn[]> {
-  const snap = await getDocs(
-    query(
-      checkinsCol(),
-      where("createdAt", ">=", Timestamp.fromDate(startDate)),
-      where("createdAt", "<=", Timestamp.fromDate(endDate)),
-      orderBy("createdAt", "desc"),
-    ),
-  );
-  return snap.docs.map(mapCheckin);
-}
-
-/**
- * Fetches check-ins for specific date keys (useful for business week filtering)
- * Note: Firestore 'in' query has a limit of 10 values, so we batch if needed
- */
-export async function fetchCheckinsByDateKeys(
-  dateKeys: string[],
-): Promise<CheckIn[]> {
-  if (dateKeys.length === 0) return [];
-  
-  // If we have 5 or fewer keys, use single query
-  if (dateKeys.length <= 5) {
-    const snap = await getDocs(
-      query(
-        checkinsCol(),
-        where("classDateKey", "in", dateKeys),
-        orderBy("createdAt", "desc"),
-      ),
-    );
-    return snap.docs.map(mapCheckin);
-  }
-  
-  // For more than 5 keys, batch the queries
-  const allCheckins: CheckIn[] = [];
-  for (let i = 0; i < dateKeys.length; i += 5) {
-    const batch = dateKeys.slice(i, i + 5);
-    const snap = await getDocs(
-      query(
-        checkinsCol(),
-        where("classDateKey", "in", batch),
-        orderBy("createdAt", "desc"),
-      ),
-    );
-    allCheckins.push(...snap.docs.map(mapCheckin));
-  }
-  
-  // Sort by createdAt descending
-  allCheckins.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  return allCheckins;
-}
-
-/**
- * Fetches all check-ins for the current business week (Monday to Friday)
- */
-export async function fetchCurrentWeekCheckins(): Promise<CheckIn[]> {
-  // Get all check-ins from the last 7 days to ensure we catch all relevant ones
-  const weekAgo = new Date();
-  weekAgo.setDate(weekAgo.getDate() - 7);
-  
-  const snap = await getDocs(
-    query(
-      checkinsCol(),
-      where("createdAt", ">=", Timestamp.fromDate(weekAgo)),
-      orderBy("createdAt", "desc"),
-    ),
-  );
-  
-  return snap.docs.map(mapCheckin);
+  return fetchCoachCheckinsFromApi({
+    days: 7,
+    classDateKeys,
+  });
 }

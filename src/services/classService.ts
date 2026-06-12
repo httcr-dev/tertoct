@@ -8,6 +8,7 @@ import {
   type DocumentData,
 } from "firebase/firestore";
 import type { GymClass } from "@/lib/types";
+import { parseApiErrorMessage } from "@/lib/utils/parseApiError";
 import { classesCol, classCheckinCountersCol } from "@/lib/firestore/refs";
 import { mapGymClass } from "@/lib/firestore/mappers";
 
@@ -79,7 +80,7 @@ export async function createGymClass(payload: Omit<GymClass, "id" | "createdBy" 
     body: JSON.stringify(payload),
   });
   if (!response.ok) {
-    throw new Error("Failed to create class");
+    throw new Error(await parseApiErrorMessage(response, "Falha ao criar turma"));
   }
 }
 
@@ -90,7 +91,7 @@ export async function updateGymClass(classId: string, fields: Partial<Omit<GymCl
     body: JSON.stringify(fields),
   });
   if (!response.ok) {
-    throw new Error("Failed to update class");
+    throw new Error(await parseApiErrorMessage(response, "Falha ao atualizar turma"));
   }
 }
 
@@ -99,7 +100,7 @@ export async function deleteGymClass(classId: string): Promise<void> {
     method: "DELETE",
   });
   if (!response.ok) {
-    throw new Error("Failed to delete class");
+    throw new Error(await parseApiErrorMessage(response, "Falha ao excluir turma"));
   }
 }
 

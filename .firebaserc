@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "tertoct-e2e"
+    "default": "tertoct-e2e",
+    "dev": "tertoct-4fee4",
+    "e2e": "tertoct-e2e",
+    "prod": "tertoct-prod"
   }
 }

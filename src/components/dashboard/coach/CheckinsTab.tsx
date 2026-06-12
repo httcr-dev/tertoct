@@ -45,12 +45,8 @@ export function CheckinsTab({
     setIsLoadingWeekData(true);
     const loadWeekData = async () => {
       try {
-        const allWeekCheckins = await fetchCurrentWeekCheckins();
         const currentWeekKeys = getWeekDateKeys();
-        const filteredWeekCheckins = allWeekCheckins.filter(
-          (checkin) =>
-            checkin.classDateKey && currentWeekKeys.includes(checkin.classDateKey),
-        );
+        const filteredWeekCheckins = await fetchCurrentWeekCheckins(currentWeekKeys);
         if (!cancelled) setWeekCheckins(filteredWeekCheckins);
       } catch (error) {
         console.error("Failed to load week data:", error);

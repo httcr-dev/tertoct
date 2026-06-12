@@ -128,7 +128,10 @@ service cloud.firestore {
     // CRUD de turmas: /api/private/classes (Admin SDK).
 
     match /classes/{classId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (
+        isCoach() ||
+        resource.data.active == true
+      );
       allow create, update, delete: if false;
     }
 
@@ -179,16 +182,8 @@ service cloud.firestore {
         isCoach()
       );
 
-      allow create: if isStudent() &&
-        request.resource.data.userId == request.auth.uid &&
-        request.resource.data.message is string &&
-        request.resource.data.message.size() > 0 &&
-        request.resource.data.message.size() <= 64 &&
-        planIsActive(currentUserPlanId()) &&
-        isCurrentUserActive();
-
-      allow delete: if isSignedIn() &&
-        resource.data.userId == request.auth.uid;
+      // Writes only via /api/private/feedback (Admin SDK).
+      allow create, delete: if false;
 
       allow update: if false;
     }

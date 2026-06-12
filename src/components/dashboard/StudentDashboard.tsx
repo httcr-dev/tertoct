@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
 import type { Plan, CheckIn } from "@/lib/types";
+import { useDashboardTabs } from "@/hooks/useDashboardTabs";
 import { useAuth } from "../auth/AuthProvider";
 import Image from "next/image";
 import { Home, List, CheckCircle, LogOut, MessageSquare, Trash2 } from "lucide-react";
@@ -48,10 +48,11 @@ type StudentTab = "overview" | "checkin" | "plans" | "feedback";
 export function StudentDashboard() {
   const { profile, signOutUser } = useAuth();
 
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const validStudentTabs: StudentTab[] = ["overview", "checkin", "plans", "feedback"];
-  const initialStudentTab = searchParams.get("tab") as StudentTab | null;
+  const { activeTab: selectedTab, selectTab: handleTabChange } = useDashboardTabs(
+    validStudentTabs,
+    "overview",
+  );
 
   const [plan, setPlan] = useState<Plan | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -64,9 +65,6 @@ export function StudentDashboard() {
   const [classCounts, setClassCounts] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
   const [checkInStatus, setCheckInStatus] = useState<ActionStatus>("idle");
-  const [selectedTab, setSelectedTab] = useState<StudentTab>(
-    initialStudentTab && validStudentTabs.includes(initialStudentTab) ? initialStudentTab : "overview",
-  );
   const [feedbackText, setFeedbackText] = useState("");
   const [feedbackStatus, setFeedbackStatus] = useState<ActionStatus>("idle");
   const [deletingFeedbackId, setDeletingFeedbackId] = useState<string | null>(null);
@@ -74,12 +72,6 @@ export function StudentDashboard() {
     null,
   );
   const [myFeedbacks, setMyFeedbacks] = useState<Feedback[]>([]);
-
-  const handleTabChange = useCallback((tab: StudentTab) => {
-    setSelectedTab(tab);
-    router.replace(`?tab=${tab}`, { scroll: false });
-  }, [router]);
-
 
   // ── Data loading ─────────────────────────────────────────────────────
   useEffect(() => {

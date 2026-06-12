@@ -68,7 +68,7 @@ describe("toggleUserActive", () => {
   it("throws when API fails", async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false });
     await expect(toggleUserActive("student-1")).rejects.toThrow(
-      "Failed to toggle user active",
+      "Falha ao alternar status do aluno",
     );
   });
 });
@@ -85,7 +85,7 @@ describe("updateUserPhone", () => {
   it("throws when API fails", async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false });
     await expect(updateUserPhone("s", null)).rejects.toThrow(
-      "Failed to update phone",
+      "Falha ao atualizar telefone",
     );
   });
 });
@@ -93,13 +93,13 @@ describe("updateUserPhone", () => {
 describe("API error handling", () => {
   it("assignPlan throws on failure", async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false });
-    await expect(assignPlan("s", "p")).rejects.toThrow("Failed to assign plan");
+    await expect(assignPlan("s", "p")).rejects.toThrow("Falha ao atribuir plano");
   });
 
   it("setPaymentDay throws on failure", async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false });
     await expect(setPaymentDay("s", 10)).rejects.toThrow(
-      "Failed to update payment day",
+      "Falha ao atualizar dia de pagamento",
     );
   });
 
@@ -112,6 +112,6 @@ describe("API error handling", () => {
         email: "e",
         weeklyCheckIns: 0,
       }),
-    ).rejects.toThrow("Failed to toggle payment");
+    ).rejects.toThrow("Falha ao alternar pagamento");
   });
 });

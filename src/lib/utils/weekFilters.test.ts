@@ -63,4 +63,13 @@ describe("weekFilters", () => {
     expect(isDateKeyInCurrentWeek("2026-03-20")).toBe(false);
     jest.useRealTimers();
   });
+
+  it("getWeekDays uses current date by default", () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(ref);
+    const days = getWeekDays();
+    expect(days).toHaveLength(5);
+    expect(days[0].getDay()).toBe(1);
+    jest.useRealTimers();
+  });
 });

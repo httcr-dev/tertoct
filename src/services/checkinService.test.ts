@@ -312,26 +312,26 @@ describe("fetchCheckinsByUser", () => {
 });
 
 describe("listenCheckinsByUser", () => {
-  it("subscribes and sorts check-ins descending", () => {
+  it("subscribes with order/limit and maps check-ins", () => {
     const onData = jest.fn();
     mockOnSnapshot.mockImplementationOnce(
       (_q: unknown, onNext: (snap: { docs: { id: string; data: () => object }[] }) => void) => {
         onNext({
           docs: [
             {
-              id: "a",
-              data: () => ({
-                userId: "u",
-                planId: "p",
-                createdAt: { toDate: () => new Date(2026, 0, 1) },
-              }),
-            },
-            {
               id: "b",
               data: () => ({
                 userId: "u",
                 planId: "p",
                 createdAt: { toDate: () => new Date(2026, 0, 5) },
+              }),
+            },
+            {
+              id: "a",
+              data: () => ({
+                userId: "u",
+                planId: "p",
+                createdAt: { toDate: () => new Date(2026, 0, 1) },
               }),
             },
           ],
@@ -342,7 +342,8 @@ describe("listenCheckinsByUser", () => {
 
     listenCheckinsByUser("user-1", onData);
 
-    expect(mockOnSnapshot).toHaveBeenCalled();
+    expect(mockOrderBy).toHaveBeenCalledWith("createdAt", "desc");
+    expect(mockLimit).toHaveBeenCalled();
     expect(onData.mock.calls[0][0][0].id).toBe("b");
     expect(onData.mock.calls[0][0][1].id).toBe("a");
   });

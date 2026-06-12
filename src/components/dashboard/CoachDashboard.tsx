@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import { useMemo, useState, useRef, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
 import type { CheckIn, Plan, StudentSummary } from "@/lib/types";
 import { filterStudents } from "@/lib/utils/studentFilter";
 import {
@@ -44,6 +43,7 @@ import {
 } from "@/services/classService";
 import type { GymClass } from "@/lib/types";
 import { useCoachDashboardData } from "@/hooks/coach/useCoachDashboardData";
+import { useDashboardTabs } from "@/hooks/useDashboardTabs";
 
 type CoachTab =
   | "overview"
@@ -72,8 +72,6 @@ export function CoachDashboard() {
     useState<StudentSummary | null>(null);
   const [checkinHistory, setCheckinHistory] = useState<CheckIn[]>([]);
   const [checkinHistoryLoading, setCheckinHistoryLoading] = useState(false);
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const validTabs: CoachTab[] = [
     "overview",
     "plans",
@@ -83,9 +81,9 @@ export function CoachDashboard() {
     "checkins",
     "expirations",
   ];
-  const initialTab = (searchParams.get("tab") as CoachTab | null);
-  const [selectedTab, setSelectedTab] = useState<CoachTab>(
-    initialTab && validTabs.includes(initialTab) ? initialTab : "overview",
+  const { activeTab: selectedTab, selectTab: handleTabChange } = useDashboardTabs(
+    validTabs,
+    "overview",
   );
   const [selectedStudentIdForCheckins, setSelectedStudentIdForCheckins] =
     useState("all");
@@ -114,11 +112,6 @@ export function CoachDashboard() {
     loadCheckinCounts: tabsNeedingCheckinCounts.includes(selectedTab),
     loadRecentCheckins: tabsNeedingRecentCheckins.includes(selectedTab),
   });
-
-  const handleTabChange = useCallback((tab: CoachTab) => {
-    setSelectedTab(tab);
-    router.replace(`?tab=${tab}`, { scroll: false });
-  }, [router]);
 
   // ── Derived data ─────────────────────────────────────────────────────
   const studentsWithCounts = useMemo(

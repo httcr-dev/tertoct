@@ -2,6 +2,7 @@ import type {
   DocumentData,
   DocumentSnapshot,
   QueryDocumentSnapshot,
+  Timestamp,
 } from "firebase/firestore";
 import type {
   CheckIn,
@@ -9,6 +10,7 @@ import type {
   AppUserProfile,
   DateLikeTimestamp,
   GymClass,
+  StudentSummary,
 } from "@/lib/types";
 import { toDate } from "@/lib/utils/date";
 
@@ -83,6 +85,26 @@ export function mapUserProfile(
     paymentDueDay: (data.paymentDueDay as number | null | undefined) ?? null,
     monthlyPaymentPaid: (data.monthlyPaymentPaid as boolean | undefined) ?? false,
     paymentValidUntil: (data.paymentValidUntil as DateLikeTimestamp | null | undefined) ?? null,
+    phone: (data.phone as string | null | undefined) ?? null,
+  };
+}
+
+export function mapStudentSummary(
+  docSnap: QueryDocumentSnapshot<DocumentData> | DocumentSnapshot<DocumentData>,
+): StudentSummary {
+  const data = (docSnap.data() ?? {}) as DocumentData;
+  return {
+    id: docSnap.id,
+    name: (data.name as string | null | undefined) ?? null,
+    email: (data.email as string | null | undefined) ?? null,
+    phone: (data.phone as string | null | undefined) ?? null,
+    photoURL: (data.photoURL as string | null | undefined) ?? null,
+    planId: (data.planId as string | null | undefined) ?? null,
+    weeklyCheckIns: 0,
+    paymentDueDay: (data.paymentDueDay as number | null | undefined) ?? null,
+    monthlyPaymentPaid: (data.monthlyPaymentPaid as boolean | undefined) ?? false,
+    paymentValidUntil: (data.paymentValidUntil as Timestamp | null | undefined) ?? null,
+    ...(data.active !== undefined ? { active: !!data.active } : {}),
   };
 }
 

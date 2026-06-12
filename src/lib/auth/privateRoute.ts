@@ -35,9 +35,18 @@ function roleFromSessionClaims(session: DecodedIdToken): string | null {
   return null;
 }
 
-async function resolveRoleFromFirestore(uid: string): Promise<string | null> {
+function isPrivilegedRole(role: string | null): boolean {
+  return role === "admin" || role === "coach";
+}
+
+type FirestoreRoleLookup = {
+  role: string | null;
+  failed: boolean;
+};
+
+async function resolveRoleFromFirestore(uid: string): Promise<FirestoreRoleLookup> {
   const cached = getCachedUserRole(uid);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) return { role: cached, failed: false };
 
   try {
     const db = getAdminFirestore();
@@ -46,14 +55,14 @@ async function resolveRoleFromFirestore(uid: string): Promise<string | null> {
       const data = userDoc.data();
       if (data && typeof data.role === "string") {
         setCachedUserRole(uid, data.role);
-        return data.role;
+        return { role: data.role, failed: false };
       }
     }
     setCachedUserRole(uid, null);
-    return null;
+    return { role: null, failed: false };
   } catch (err) {
     console.warn("[privateRoute] Failed to fetch role from Firestore:", err);
-    return null;
+    return { role: null, failed: true };
   }
 }
 
@@ -105,9 +114,19 @@ export async function getPrivateRouteContext(
       let role = jwtRole;
 
       if (session.uid) {
-        const firestoreRole = await resolveRoleFromFirestore(session.uid);
-        if (firestoreRole !== null) {
-          role = firestoreRole;
+        const lookup = await resolveRoleFromFirestore(session.uid);
+        if (lookup.failed) {
+          if (isPrivilegedRole(jwtRole)) {
+            return {
+              ok: false as const,
+              response: NextResponse.json(
+                { error: "Service unavailable" },
+                { status: 503 },
+              ),
+            };
+          }
+        } else if (lookup.role !== null) {
+          role = lookup.role;
         }
       }
 

@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "test:coverage": "jest --coverage",
+    "test:rules": "firebase emulators:exec --project tertoct-e2e --only firestore \"jest src/security/firestore.rules.test.ts\"",
     "playwright:install": "playwright install chromium",
     "pretest:e2e": "npm run playwright:install",
     "test:e2e": "firebase emulators:exec --project tertoct-e2e --only firestore,auth \"playwright test\"",
