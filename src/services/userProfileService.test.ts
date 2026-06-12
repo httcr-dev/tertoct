@@ -7,7 +7,7 @@ const mockDoc = jest.fn((_db: unknown, col: string, id: string) => `${col}/${id}
 const mockGetFirestoreDb = jest.fn(() => "mock-db");
 
 jest.mock("firebase/firestore", () => ({
-  doc: (...args: unknown[]) => mockDoc(...args),
+  doc: (a: unknown, b: string, c: string) => mockDoc(a, b, c),
   getDoc: (...args: unknown[]) => mockGetDoc(...args),
   setDoc: (...args: unknown[]) => mockSetDoc(...args),
   updateDoc: (...args: unknown[]) => mockUpdateDoc(...args),

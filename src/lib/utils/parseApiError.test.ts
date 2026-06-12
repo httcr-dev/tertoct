@@ -4,7 +4,7 @@ describe("parseApiErrorMessage", () => {
   it("returns server error message when present", async () => {
     const response = {
       json: async () => ({ error: "Conta desativada" }),
-    } as Response;
+    } as unknown as Response;
 
     await expect(parseApiErrorMessage(response, "fallback")).resolves.toBe(
       "Conta desativada",
@@ -14,7 +14,7 @@ describe("parseApiErrorMessage", () => {
   it("returns fallback when body has no error field", async () => {
     const response = {
       json: async () => ({}),
-    } as Response;
+    } as unknown as Response;
 
     await expect(parseApiErrorMessage(response, "fallback")).resolves.toBe(
       "fallback",
@@ -24,7 +24,7 @@ describe("parseApiErrorMessage", () => {
   it("returns fallback when error field is empty", async () => {
     const response = {
       json: async () => ({ error: "" }),
-    } as Response;
+    } as unknown as Response;
 
     await expect(parseApiErrorMessage(response, "fallback")).resolves.toBe(
       "fallback",
@@ -34,7 +34,7 @@ describe("parseApiErrorMessage", () => {
   it("returns fallback when response body is null", async () => {
     const response = {
       json: async () => null,
-    } as Response;
+    } as unknown as Response;
 
     await expect(parseApiErrorMessage(response, "fallback")).resolves.toBe(
       "fallback",
@@ -46,7 +46,7 @@ describe("parseApiErrorMessage", () => {
       json: async () => {
         throw new Error("invalid json");
       },
-    } as Response;
+    } as unknown as Response;
 
     await expect(parseApiErrorMessage(response, "fallback")).resolves.toBe(
       "fallback",

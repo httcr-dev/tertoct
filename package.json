@@ -16,7 +16,11 @@
     "playwright:install": "playwright install chromium",
     "pretest:e2e": "npm run playwright:install",
     "test:e2e": "firebase emulators:exec --project tertoct-e2e --only firestore,auth \"playwright test\"",
-    "test:e2e:ui": "firebase emulators:exec --project tertoct-e2e --only firestore,auth \"playwright test --ui\""
+    "test:e2e:ui": "firebase emulators:exec --project tertoct-e2e --only firestore,auth \"playwright test --ui\"",
+    "precommit": "bash scripts/pre-commit.sh",
+    "validate": "npm run precommit",
+    "deploy:firestore:dev": "firebase deploy --only firestore:rules,firestore:indexes --project dev",
+    "prepare": "husky"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.56.0",
@@ -41,6 +45,8 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "eslint-config-prettier": "^10.1.8",
+    "firebase-tools": "^14.0.0",
+    "husky": "^9.1.7",
     "jest": "^30.3.0",
     "prettier": "^3.8.1",
     "tailwindcss": "^4",

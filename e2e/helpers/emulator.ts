@@ -118,12 +118,14 @@ export async function setStudentPaymentOverdue(overdue: boolean): Promise<void> 
   );
 }
 
-export async function setClassSchedule(options: {
-  startTime: string;
-  checkinDeadlineTime: string;
-  capacity?: number;
-  active?: boolean;
-}): Promise<void> {
+export async function setClassSchedule(
+  options: Partial<{
+    startTime: string;
+    checkinDeadlineTime: string;
+    capacity: number;
+    active: boolean;
+  }>,
+): Promise<void> {
   const db = getDb();
   await db
     .collection("classes")
@@ -223,8 +225,21 @@ export async function restoreDefaultClassSchedule(): Promise<void> {
   });
 }
 
+export async function clearStudentFeedbacks(): Promise<void> {
+  const db = getDb();
+  const snap = await db
+    .collection("feedbacks")
+    .where("userId", "==", E2E_IDS.studentUid)
+    .get();
+  if (snap.empty) return;
+  const batch = db.batch();
+  snap.docs.forEach((doc) => batch.delete(doc.ref));
+  await batch.commit();
+}
+
 /** Restaura perfil e turma padrão do aluno E2E (use entre specs/arquivos). */
 export async function resetE2eStudentState(): Promise<void> {
   await restoreDefaultStudentProfile();
   await restoreDefaultClassSchedule();
+  await clearStudentFeedbacks();
 }

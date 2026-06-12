@@ -41,7 +41,9 @@ test.describe("smoke pós-deploy — aluno", () => {
     await expect(page.getByText(E2E_LABELS.planName)).toBeVisible();
 
     await page.getByTestId("student-tab-checkin").click();
-    await expect(page.getByText(E2E_LABELS.className)).toBeVisible();
+    await expect(
+      page.locator("select option", { hasText: E2E_LABELS.className }),
+    ).toHaveCount(1);
 
     await page.getByTestId("student-tab-feedback").click();
     const message = `Smoke feedback ${Date.now()}`;
@@ -52,8 +54,11 @@ test.describe("smoke pós-deploy — aluno", () => {
     });
     await expect(page.getByText(message)).toBeVisible();
 
-    const row = page.locator("main").filter({ hasText: message });
-    await row.getByRole("button", { name: "Apagar" }).click();
+    await page
+      .locator("div.flex.items-center.justify-between.gap-4")
+      .filter({ has: page.getByText(message, { exact: true }) })
+      .getByRole("button", { name: "Apagar" })
+      .click();
     await expect(page.getByText(/Feedback removido/i).first()).toBeVisible({
       timeout: 15_000,
     });
@@ -66,12 +71,18 @@ test.describe("smoke pós-deploy — aluno", () => {
     await expect(page.getByTestId("student-logout")).toBeVisible({
       timeout: 30_000,
     });
-    await expect(page.getByText(E2E_LABELS.className)).toHaveCount(0);
+    await expect(
+      page.locator("select option", { hasText: E2E_LABELS.className }),
+    ).toHaveCount(0);
   });
 });
 
 test.describe("smoke pós-deploy — coach", () => {
   test.use({ storageState: path.join(__dirname, ".auth", "coach.json") });
+
+  test.beforeEach(async () => {
+    await restoreDefaultClassSchedule();
+  });
 
   test("alunos, turmas, planos e aba check-ins carregam", async ({ page }) => {
     await page.goto("/dashboard");
