@@ -34,13 +34,15 @@ const mockFetch = jest.fn();
 global.fetch = mockFetch as typeof fetch;
 
 import {
+  fetchAllStudentsForCoach,
   fetchCheckinCountsByCoach,
   fetchCurrentWeekCheckins,
   fetchRecentCheckinsSince,
+  fetchStudentsForCoach,
   getCoachCheckinCountsPollIntervalMs,
+  getCoachStudentsPollIntervalMs,
   listenCoaches,
   listenPlans,
-  listenStudents,
 } from "./dashboardService";
 
 describe("dashboardService", () => {
@@ -64,18 +66,48 @@ describe("dashboardService", () => {
     expect(onData).toHaveBeenCalledWith([{ id: "p1" }, { id: "p2" }]);
   });
 
-  it("listenStudents uses mapStudentSummary", () => {
-    const onData = jest.fn();
-    mockMapStudentSummary.mockImplementation((d: { id: string }) => ({ id: d.id }));
-    mockOnSnapshot.mockImplementationOnce((_queryRef: unknown, onNext: (snap: unknown) => void) => {
-      onNext({ docs: [{ id: "s1" }] });
-      return () => undefined;
+  it("fetchStudentsForCoach loads paginated students", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        students: [{ id: "s1", name: "Ana" }],
+        nextCursor: "cursor-1",
+      }),
     });
 
-    listenStudents(onData);
+    const page = await fetchStudentsForCoach({ limit: 50 });
+    expect(page.students).toEqual([{ id: "s1", name: "Ana" }]);
+    expect(page.nextCursor).toBe("cursor-1");
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/private/users/students?limit=50",
+      { credentials: "include" },
+    );
+  });
 
-    expect(mockWhere).toHaveBeenCalledWith("role", "==", "student");
-    expect(onData).toHaveBeenCalledWith([{ id: "s1" }]);
+  it("fetchAllStudentsForCoach follows nextCursor pages", async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          students: [{ id: "s1" }],
+          nextCursor: "c1",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          students: [{ id: "s2" }],
+          nextCursor: null,
+        }),
+      });
+
+    const students = await fetchAllStudentsForCoach();
+    expect(students).toEqual([{ id: "s1" }, { id: "s2" }]);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("getCoachStudentsPollIntervalMs returns poll interval", () => {
+    expect(getCoachStudentsPollIntervalMs()).toBe(60_000);
   });
 
   it("listenCoaches filters role query and maps defaults", () => {
@@ -234,18 +266,11 @@ describe("dashboardService", () => {
     await expect(fetchRecentCheckinsSince(new Date())).resolves.toEqual([]);
   });
 
-  it("listenStudents forwards snapshot errors to handler", () => {
-    const onError = jest.fn();
-    mockOnSnapshot.mockImplementationOnce(
-      (_q: unknown, _onNext: unknown, onErr: (error: Error) => void) => {
-        onErr(new Error("denied"));
-        return () => undefined;
-      },
+  it("fetchStudentsForCoach throws when API fails", async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false });
+    await expect(fetchStudentsForCoach()).rejects.toThrow(
+      "Failed to load students",
     );
-
-    listenStudents(jest.fn(), onError);
-
-    expect(onError).toHaveBeenCalledWith(expect.any(Error));
   });
 
   it("listenCoaches includes active flag when present", () => {

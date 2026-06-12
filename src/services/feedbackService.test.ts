@@ -11,6 +11,7 @@ jest.mock("firebase/firestore", () => ({
   collection: mockCollection,
   deleteDoc: jest.fn(),
   doc: jest.fn(),
+  limit: jest.fn((n: number) => ({ kind: "limit", n })),
   onSnapshot: mockOnSnapshot,
   query: mockQuery,
   serverTimestamp: jest.fn(),

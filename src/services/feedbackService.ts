@@ -1,5 +1,6 @@
 import {
   collection,
+  limit,
   onSnapshot,
   query,
   where,
@@ -70,7 +71,7 @@ export function listenMyFeedbacks(
   onData: (items: Feedback[]) => void,
   onError?: (error: unknown) => void,
 ): Unsubscribe {
-  const q = query(feedbacksCol(), where("userId", "==", userId));
+  const q = query(feedbacksCol(), where("userId", "==", userId), limit(50));
   return onSnapshot(
     q,
     (snap) => {

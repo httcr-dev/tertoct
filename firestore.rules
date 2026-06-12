@@ -199,5 +199,10 @@ service cloud.firestore {
       allow read, create: if isCoach() || isAdmin();
       allow update, delete: if isAdmin();
     }
+
+    // Server-side metrics (Admin SDK only).
+    match /metrics/{id} {
+      allow read, write: if false;
+    }
   }
 }

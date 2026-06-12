@@ -3,15 +3,14 @@
 import Image from "next/image";
 import { StudentSummary, CheckIn, GymClass } from "@/lib/types";
 import { toDate } from "@/lib/utils/date";
-import { useMemo, useState, useEffect } from "react";
-import { 
-  getWeekDateKeys, 
-  formatDateKey, 
+import { useMemo, useState } from "react";
+import {
+  getWeekDateKeys,
+  formatDateKey,
   isDateKeyInCurrentWeek,
   getWeekStart,
-  getWeekEnd 
+  getWeekEnd,
 } from "@/lib/utils/weekFilters";
-import { fetchCurrentWeekCheckins } from "@/services/dashboardService";
 
 interface CheckinsTabProps {
   recentCheckins: CheckIn[];
@@ -36,30 +35,14 @@ export function CheckinsTab({
     return formatDateKey(d);
   });
   const [viewMode, setViewMode] = useState<ViewMode>("day");
-  const [weekCheckins, setWeekCheckins] = useState<CheckIn[]>([]);
-  const [isLoadingWeekData, setIsLoadingWeekData] = useState(false);
 
-  // Semana atual (Seg–Sex): usada no gráfico em ambos os modos e na lista "Semana atual"
-  useEffect(() => {
-    let cancelled = false;
-    setIsLoadingWeekData(true);
-    const loadWeekData = async () => {
-      try {
-        const currentWeekKeys = getWeekDateKeys();
-        const filteredWeekCheckins = await fetchCurrentWeekCheckins(currentWeekKeys);
-        if (!cancelled) setWeekCheckins(filteredWeekCheckins);
-      } catch (error) {
-        console.error("Failed to load week data:", error);
-        if (!cancelled) setWeekCheckins([]);
-      } finally {
-        if (!cancelled) setIsLoadingWeekData(false);
-      }
-    };
-    void loadWeekData();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const weekCheckins = useMemo(
+    () =>
+      recentCheckins.filter(
+        (c) => c.classDateKey && isDateKeyInCurrentWeek(c.classDateKey),
+      ),
+    [recentCheckins],
+  );
 
   const displayCheckins = viewMode === "week" ? weekCheckins : recentCheckins;
 
@@ -256,9 +239,6 @@ export function CheckinsTab({
             <span className="min-w-0 truncate">{activityChartTitle}</span>
           </h3>
           <div className="flex items-center gap-2">
-            {isLoadingWeekData && (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-amber-500/30 border-t-amber-500" />
-            )}
             <span className="shrink-0 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-xs font-semibold text-amber-300">
               {checkinsForChart.length}
             </span>
@@ -333,16 +313,7 @@ export function CheckinsTab({
       </div>
 
       <div className="grid min-w-0 gap-3">
-        {isLoadingWeekData && viewMode === "week" ? (
-          <div className="dashboard-card px-6 py-12 text-center">
-            <div className="flex items-center justify-center gap-3">
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-amber-500/30 border-t-amber-500" />
-              <p className="text-sm font-medium text-zinc-400">
-                Carregando check-ins da semana...
-              </p>
-            </div>
-          </div>
-        ) : filteredCheckins.length > 0 ? (
+        {filteredCheckins.length > 0 ? (
           filteredCheckins.map((c) => {
             const student = studentsWithCounts.find((s) => s.id === c.userId);
             const gymClass = classes.find((cl) => cl.id === c.classId);

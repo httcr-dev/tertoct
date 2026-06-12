@@ -77,9 +77,13 @@ async function resolveSessionAndRole(
     );
     if (proxySession) {
       const session = decodedTokenFromProxySession(proxySession);
+      const jwtRole = roleFromProxySession(proxySession);
+      if (session.uid && jwtRole !== null) {
+        setCachedUserRole(session.uid, jwtRole);
+      }
       return {
         session,
-        jwtRole: roleFromProxySession(proxySession),
+        jwtRole,
       };
     }
   }

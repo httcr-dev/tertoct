@@ -6,8 +6,8 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import type { CheckIn, Plan, StudentSummary } from "@/lib/types";
-import { mapPlan, mapStudentSummary } from "@/lib/firestore/mappers";
-import { plansCol, publicProfilesCol, usersCol } from "@/lib/firestore/refs";
+import { mapPlan } from "@/lib/firestore/mappers";
+import { plansCol, publicProfilesCol } from "@/lib/firestore/refs";
 
 type SnapshotErrorHandler = (error: unknown) => void;
 
@@ -19,19 +19,6 @@ export function listenPlans(
     query(plansCol(), orderBy("name", "asc")),
     (snap) => {
       onData(snap.docs.map(mapPlan));
-    },
-    onError,
-  );
-}
-
-export function listenStudents(
-  onData: (students: StudentSummary[]) => void,
-  onError?: SnapshotErrorHandler,
-): Unsubscribe {
-  return onSnapshot(
-    query(usersCol(), where("role", "==", "student")),
-    (snap) => {
-      onData(snap.docs.map((docSnap) => mapStudentSummary(docSnap)));
     },
     onError,
   );
@@ -62,6 +49,7 @@ export function listenCoaches(
 }
 
 const COACH_COUNTS_POLL_MS = 120_000;
+const COACH_STUDENTS_POLL_MS = 60_000;
 
 /** Coach dashboard: 30-day check-in counts via private API (no client listener on all checkins). */
 export async function fetchCheckinCountsByCoach(
@@ -86,6 +74,54 @@ export async function fetchCheckinCountsByCoach(
 
 export function getCoachCheckinCountsPollIntervalMs(): number {
   return COACH_COUNTS_POLL_MS;
+}
+
+export function getCoachStudentsPollIntervalMs(): number {
+  return COACH_STUDENTS_POLL_MS;
+}
+
+type StudentsPageResponse = {
+  students?: StudentSummary[];
+  nextCursor?: string | null;
+};
+
+/** Coach dashboard: paginated students via private API. */
+export async function fetchStudentsForCoach(options?: {
+  limit?: number;
+  cursor?: string;
+}): Promise<StudentsPageResponse> {
+  const params = new URLSearchParams();
+  if (options?.limit != null) {
+    params.set("limit", String(options.limit));
+  }
+  if (options?.cursor) {
+    params.set("cursor", options.cursor);
+  }
+  const qs = params.toString();
+  const response = await fetch(
+    `/api/private/users/students${qs ? `?${qs}` : ""}`,
+    { credentials: "include" },
+  );
+  if (!response.ok) {
+    throw new Error("Failed to load students");
+  }
+  return (await response.json()) as StudentsPageResponse;
+}
+
+/** Loads all student pages for coach dashboards. */
+export async function fetchAllStudentsForCoach(): Promise<StudentSummary[]> {
+  const all: StudentSummary[] = [];
+  let cursor: string | undefined;
+
+  do {
+    const page = await fetchStudentsForCoach({ limit: 100, cursor });
+    if (Array.isArray(page.students)) {
+      all.push(...page.students);
+    }
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor);
+
+  return all;
 }
 
 type CoachCheckinsQuery = {

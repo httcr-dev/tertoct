@@ -5,6 +5,10 @@ import { getPrivateRouteContextFromRequest, requireRole } from "@/lib/auth/priva
 import { isTrustedMutationRequest } from "@/lib/security/origin";
 import { canCancelCheckIn } from "@/lib/utils/checkinCancel";
 import { parseHHmm } from "@/lib/utils/time";
+import {
+  applyCheckinRollupDecrement,
+  isWithinRollupWindow,
+} from "@/lib/server/checkinCountRollup";
 
 export const runtime = "nodejs";
 
@@ -116,7 +120,12 @@ export async function DELETE(req: Request, context: RouteContext) {
           ? Number(classCounterSnap.data()?.count)
           : 0;
 
+      const createdAt = checkin.createdAt?.toDate?.() ?? null;
       tx.delete(checkinsRef);
+
+      if (isWithinRollupWindow(createdAt)) {
+        applyCheckinRollupDecrement(tx, db, userId);
+      }
 
       if (currentCount > 0) {
         tx.set(

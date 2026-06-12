@@ -73,89 +73,86 @@ export function StudentDashboard() {
   );
   const [myFeedbacks, setMyFeedbacks] = useState<Feedback[]>([]);
 
-  // ── Data loading ─────────────────────────────────────────────────────
+  // ── Plano do aluno (todas as abas) ─────────────────────────────────────
   useEffect(() => {
-    let unsubCheckins: (() => void) | undefined;
-    let unsubFeedbacks: (() => void) | undefined;
-    let unsubClasses: (() => void) | undefined;
-    let unsubCounters: (() => void) | undefined;
+    if (!profile?.id) {
+      setLoading(false);
+      return;
+    }
 
-    const load = async () => {
-      if (!profile) {
-        setLoading(false);
-        return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        if (profile.planId) {
+          const current = await getPlanById(profile.planId);
+          if (!cancelled) setPlan(current);
+        } else if (!cancelled) {
+          setPlan(null);
+        }
+      } catch (error) {
+        console.error("[StudentDashboard] Failed to load plan", error);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
+    })();
 
-      const tasks: Promise<void>[] = [];
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.id, profile?.planId]);
 
-      // Load current student plan
-      if (profile.planId) {
-        tasks.push(
-          (async () => {
-            const current = await getPlanById(profile.planId as string);
-            setPlan(current);
-          })(),
-        );
-      }
+  // ── Check-ins: visão geral + check-in ──────────────────────────────────
+  useEffect(() => {
+    if (!profile?.id) return;
+    if (selectedTab !== "overview" && selectedTab !== "checkin") return;
+    return listenCheckinsByUser(profile.id, setCheckIns);
+  }, [profile?.id, selectedTab]);
 
-      // Real-time check-ins listener
-      unsubCheckins = listenCheckinsByUser(profile.id, setCheckIns);
+  // ── Turmas: visão geral (cancelar) + check-in ──────────────────────────
+  useEffect(() => {
+    if (!profile?.id) return;
+    if (selectedTab !== "overview" && selectedTab !== "checkin") return;
+    return listenActiveClasses((next) => {
+      setClasses(next);
+      setSelectedClassId((prev) => prev || next[0]?.id || "");
+    });
+  }, [profile?.id, selectedTab]);
 
-      // Real-time classes listener
-      unsubClasses = listenActiveClasses((next) => {
-        setClasses(next);
-        setSelectedClassId((prev) => prev || next[0]?.id || "");
+  // ── Feedbacks: só na aba feedback ─────────────────────────────────────
+  useEffect(() => {
+    if (!profile?.id || selectedTab !== "feedback") return;
+    return listenMyFeedbacks(profile.id, setMyFeedbacks);
+  }, [profile?.id, selectedTab]);
+
+  // ── Lista de planos: só na aba planos ─────────────────────────────────
+  useEffect(() => {
+    if (selectedTab !== "plans") return;
+
+    let cancelled = false;
+    void fetchActivePlans()
+      .then((next) => {
+        if (!cancelled) {
+          setPlans(next.sort((a, b) => a.name.localeCompare(b.name)));
+        }
+      })
+      .catch((error) => {
+        console.error("[StudentDashboard] Failed to load plans", error);
       });
 
-      // Load class counters for the initially selected date (today)
-      const todayKey = getDateKeyForOffset(new Date(), -180);
-      unsubCounters = listenClassCountersForDate(
-        todayKey,
-        (counts) => setClassCounts(counts),
-        () => setClassCounts(new Map()),
-      );
-
-      // My feedbacks listener
-      unsubFeedbacks = listenMyFeedbacks(profile.id, setMyFeedbacks);
-
-      // Fetch all active plans
-      tasks.push(
-        (async () => {
-          const next = await fetchActivePlans();
-          setPlans(next.sort((a, b) => a.name.localeCompare(b.name)));
-        })(),
-      );
-
-      try {
-        await Promise.all(tasks);
-      } catch (error) {
-        console.error("[StudentDashboard] Failed to load initial data", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    load();
     return () => {
-      unsubCheckins?.();
-      unsubFeedbacks?.();
-      unsubClasses?.();
-      unsubCounters?.();
+      cancelled = true;
     };
-  }, [profile]);
+  }, [selectedTab]);
 
-  // ── Listen to selected date changes ─────────────────────────────────────
+  // ── Contadores de vagas: só na aba check-in ───────────────────────────
   useEffect(() => {
-    const unsubCounters: (() => void) | undefined = listenClassCountersForDate(
+    if (selectedTab !== "checkin") return;
+    return listenClassCountersForDate(
       selectedDateKey,
       (counts) => setClassCounts(counts),
       () => setClassCounts(new Map()),
     );
-
-    return () => {
-      unsubCounters?.();
-    };
-  }, [selectedDateKey]);
+  }, [selectedTab, selectedDateKey]);
 
   // ── Derived state ────────────────────────────────────────────────────
   const currentWeekInfo = useMemo(() => {

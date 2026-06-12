@@ -28,6 +28,11 @@ jest.mock("@/lib/security/origin", () => ({
   isTrustedMutationRequest: () => true,
 }));
 
+jest.mock("@/lib/server/checkinCountRollup", () => ({
+  applyCheckinRollupDecrement: jest.fn(),
+  isWithinRollupWindow: jest.fn(() => true),
+}));
+
 function baseSeed(overrides: Partial<FirestoreSeed> = {}): FirestoreSeed {
   return {
     checkins: {
