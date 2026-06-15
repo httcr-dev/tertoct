@@ -1,4 +1,5 @@
 import type { StudentSummary } from "@/lib/types";
+import { toDate } from "@/lib/utils/date";
 import { isPaymentOverdue } from "@/lib/utils/payment";
 
 export interface FilterParams {
@@ -47,7 +48,8 @@ export function filterStudents(
 
       if (isPaid) {
         if (!s.paymentValidUntil) return paymentFilter === "active";
-        const validUntil = s.paymentValidUntil.toDate();
+        const validUntil = toDate(s.paymentValidUntil);
+        if (!validUntil) return paymentFilter === "active";
         const isNextMonth =
           validUntil.getMonth() !== now.getMonth() ||
           validUntil.getFullYear() !== now.getFullYear();

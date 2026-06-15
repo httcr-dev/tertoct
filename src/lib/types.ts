@@ -62,5 +62,5 @@ export interface StudentSummary {
   paymentDueDay?: number | null;
   monthlyPaymentPaid?: boolean;
   phone?: string | null;
-  paymentValidUntil?: Timestamp | null;
+  paymentValidUntil?: DateLikeTimestamp | null;
 }

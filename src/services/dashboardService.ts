@@ -128,6 +128,8 @@ type CoachCheckinsQuery = {
   since?: Date;
   days?: number;
   classDateKeys?: string[];
+  classDateKeyFrom?: string;
+  classDateKeyTo?: string;
 };
 
 async function fetchCoachCheckinsFromApi(
@@ -141,6 +143,10 @@ async function fetchCoachCheckinsFromApi(
   }
   if (query.classDateKeys && query.classDateKeys.length > 0) {
     params.set("classDateKeys", query.classDateKeys.join(","));
+  }
+  if (query.classDateKeyFrom && query.classDateKeyTo) {
+    params.set("fromDateKey", query.classDateKeyFrom);
+    params.set("toDateKey", query.classDateKeyTo);
   }
 
   const response = await fetch(
@@ -163,6 +169,16 @@ async function fetchCoachCheckinsFromApi(
 /** Coach dashboard: check-ins since `since` via private API. */
 export async function fetchRecentCheckinsSince(since: Date): Promise<CheckIn[]> {
   return fetchCoachCheckinsFromApi({ since });
+}
+
+/** Coach check-in history for a week/month period. */
+export async function fetchCheckinsForHistoryPeriod(
+  query: Pick<
+    CoachCheckinsQuery,
+    "classDateKeys" | "classDateKeyFrom" | "classDateKeyTo"
+  >,
+): Promise<CheckIn[]> {
+  return fetchCoachCheckinsFromApi(query);
 }
 
 /** Coach dashboard: current business week check-ins via private API. */

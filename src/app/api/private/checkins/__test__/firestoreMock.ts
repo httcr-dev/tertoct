@@ -4,10 +4,6 @@ export type FirestoreSeed = Record<string, Record<string, DocData>>;
 
 export type DocRef = { collection: string; id: string };
 
-function refKey(ref: DocRef): string {
-  return `${ref.collection}/${ref.id}`;
-}
-
 export function createFirestoreMock(seed: FirestoreSeed) {
   const store: FirestoreSeed = structuredClone(seed);
 

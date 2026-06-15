@@ -19,7 +19,7 @@ import { fetchActivePlans } from "@/services/landingService";
 import { getPlanById } from "@/services/plansQueryService";
 import { listenActiveClasses, listenClassCountersForDate } from "@/services/classService";
 import type { GymClass } from "@/lib/types";
-import { getDateKeyForOffset, utcDateAtLocalTime } from "@/lib/utils/dateKey";
+import { utcDateAtLocalTime } from "@/lib/utils/dateKey";
 import { parseHHmm } from "@/lib/utils/time";
 import {
   MUTATION_TOAST_MIN_MS,

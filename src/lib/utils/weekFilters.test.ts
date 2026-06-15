@@ -1,8 +1,11 @@
 import {
   formatDateKey,
+  getBusinessWeekAnchor,
   getWeekDateKeys,
+  getWeekDateKeysForWeek,
   getWeekDays,
   getWeekEnd,
+  getWeekLabel,
   getWeekStart,
   isDateKeyInCurrentWeek,
   isInCurrentWeek,
@@ -71,5 +74,26 @@ describe("weekFilters", () => {
     expect(days).toHaveLength(5);
     expect(days[0].getDay()).toBe(1);
     jest.useRealTimers();
+  });
+
+  it("getWeekDateKeysForWeek returns previous business week", () => {
+    expect(getWeekDateKeysForWeek("previous", ref)).toEqual([
+      "2026-03-16",
+      "2026-03-17",
+      "2026-03-18",
+      "2026-03-19",
+      "2026-03-20",
+    ]);
+  });
+
+  it("getBusinessWeekAnchor shifts seven days for previous week", () => {
+    const previousMonday = getWeekStart(getBusinessWeekAnchor("previous", ref));
+    expect(previousMonday.getDate()).toBe(16);
+    expect(previousMonday.getMonth()).toBe(2);
+  });
+
+  it("getWeekLabel returns Portuguese labels", () => {
+    expect(getWeekLabel("current")).toBe("Semana atual");
+    expect(getWeekLabel("previous")).toBe("Semana passada");
   });
 });

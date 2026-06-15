@@ -17,13 +17,23 @@ export function startOfWeek(date: Date): Date {
 export function toDate(value: unknown): Date | null {
   if (!value) return null;
   if (value instanceof Date) return value;
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
 
   const v = value as Record<string, unknown>;
   if (typeof v.toDate === "function") {
     return (v as { toDate: () => Date }).toDate();
   }
-  if (typeof v.seconds === "number") {
-    return new Date(v.seconds * 1000);
+  const seconds =
+    typeof v.seconds === "number"
+      ? v.seconds
+      : typeof v._seconds === "number"
+        ? v._seconds
+        : null;
+  if (seconds != null) {
+    return new Date(seconds * 1000);
   }
   return null;
 }

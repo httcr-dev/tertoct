@@ -39,7 +39,11 @@ function mapSnapshotDocs(
 /** Coach dashboard: check-ins since `since`, optionally filtered by classDateKey. */
 export async function listCheckinsSince(
   since: Date,
-  options?: { classDateKeys?: string[] },
+  options?: {
+    classDateKeys?: string[];
+    classDateKeyFrom?: string;
+    classDateKeyTo?: string;
+  },
 ): Promise<CheckIn[]> {
   const classDateKeys = options?.classDateKeys?.filter((key) =>
     /^\d{4}-\d{2}-\d{2}$/.test(key),
@@ -53,6 +57,20 @@ export async function listCheckinsSince(
     const snap = await getAdminFirestore()
       .collection("checkins")
       .where("classDateKey", "in", classDateKeys)
+      .orderBy("createdAt", "desc")
+      .limit(CHECKIN_LIST_CAP)
+      .get();
+    return mapSnapshotDocs(snap.docs);
+  }
+
+  const from = options?.classDateKeyFrom;
+  const to = options?.classDateKeyTo;
+  if (from && to && /^\d{4}-\d{2}-\d{2}$/.test(from) && /^\d{4}-\d{2}-\d{2}$/.test(to)) {
+    const snap = await getAdminFirestore()
+      .collection("checkins")
+      .where("classDateKey", ">=", from)
+      .where("classDateKey", "<=", to)
+      .orderBy("classDateKey", "asc")
       .orderBy("createdAt", "desc")
       .limit(CHECKIN_LIST_CAP)
       .get();

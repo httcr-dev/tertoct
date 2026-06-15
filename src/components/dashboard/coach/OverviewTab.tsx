@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import {
   CalendarDays,
   CheckCircle,
@@ -8,9 +9,11 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
+import { WeekChartFilter } from "@/components/ui/WeekChartFilter";
 import { StudentSummary, Plan, CheckIn, GymClass } from "@/lib/types";
 import { toDate } from "@/lib/utils/date";
-import { getWeekDateKeys } from "@/lib/utils/weekFilters";
+import type { BusinessWeek } from "@/lib/utils/weekFilters";
+import { getWeekDateKeysForWeek, getWeekLabel } from "@/lib/utils/weekFilters";
 
 function getLocalDateKey(date: Date) {
   const y = date.getFullYear();
@@ -38,8 +41,12 @@ function getClassLabel(checkin: CheckIn, classesById: Map<string, GymClass>) {
   return time ? `${name} • ${time}` : name;
 }
 
-function buildClassDayRows(checkins: CheckIn[], classes: GymClass[]) {
-  const dateKeys = getWeekDateKeys();
+function buildClassDayRows(
+  checkins: CheckIn[],
+  classes: GymClass[],
+  week: BusinessWeek,
+) {
+  const dateKeys = getWeekDateKeysForWeek(week);
   const dateKeySet = new Set(dateKeys);
   const classesById = new Map(classes.map((c) => [c.id, c]));
   const rows = new Map<
@@ -99,10 +106,11 @@ export function OverviewTab({
   recentCheckins,
   classes,
 }: OverviewTabProps) {
+  const [chartWeek, setChartWeek] = useState<BusinessWeek>("current");
   const now = new Date();
-  const { dateKeys, rows: classDayRows } = buildClassDayRows(
-    recentCheckins,
-    classes,
+  const { dateKeys, rows: classDayRows } = useMemo(
+    () => buildClassDayRows(recentCheckins, classes, chartWeek),
+    [recentCheckins, classes, chartWeek],
   );
   const maxCellCount = Math.max(
     1,
@@ -161,15 +169,18 @@ export function OverviewTab({
       </div>
 
       <div className="dashboard-card dashboard-card-accent animate-panel-in overflow-hidden bg-gradient-to-br from-zinc-900/70 via-zinc-900/40 to-zinc-950/30 p-6 lg:col-span-3 [animation-delay:180ms]">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
-              <Sparkles className="h-4 w-4 text-amber-400" />
-              Check-ins por turma e dia
-            </h3>
-            <p className="mt-1 text-xs text-zinc-500">
-              Semana atual (segunda a sexta), por horário de aula.
-            </p>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between lg:flex-1">
+            <div>
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
+                <Sparkles className="h-4 w-4 text-amber-400" />
+                Check-ins por turma e dia
+              </h3>
+              <p className="mt-1 text-xs text-zinc-500">
+                {getWeekLabel(chartWeek)} (segunda a sexta), por horário de aula.
+              </p>
+            </div>
+            <WeekChartFilter value={chartWeek} onChange={setChartWeek} />
           </div>
           <div className="grid grid-cols-2 gap-2 sm:flex">
             <div className="rounded-xl border border-zinc-800/60 bg-black/25 px-4 py-3">
@@ -244,7 +255,7 @@ export function OverviewTab({
           ) : (
             <div className="rounded-xl border border-dashed border-zinc-800/70 py-12 text-center">
               <p className="text-sm text-zinc-500">
-                Nenhum check-in na semana atual (segunda a sexta).
+                Nenhum check-in na {getWeekLabel(chartWeek).toLowerCase()} (segunda a sexta).
               </p>
             </div>
           )}
@@ -314,7 +325,7 @@ export function OverviewTab({
           ) : (
             <div className="rounded-xl border border-dashed border-zinc-800/70 py-12 text-center">
               <p className="text-sm text-zinc-500">
-                Nenhum check-in na semana atual (segunda a sexta).
+                Nenhum check-in na {getWeekLabel(chartWeek).toLowerCase()} (segunda a sexta).
               </p>
             </div>
           )}

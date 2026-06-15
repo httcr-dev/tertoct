@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { CheckIn, GymClass, Plan, StudentSummary } from "@/lib/types";
-import { getWeekStart } from "@/lib/utils/weekFilters";
+import { getBusinessWeekAnchor, getWeekStart } from "@/lib/utils/weekFilters";
 import {
   fetchAllStudentsForCoach,
   fetchCheckinCountsByCoach,
@@ -173,7 +173,7 @@ export function useCoachDashboardData(options: UseCoachDashboardDataOptions) {
 
     const loadRecent = async () => {
       try {
-        const since = getWeekStart();
+        const since = getWeekStart(getBusinessWeekAnchor("previous"));
         const next = await fetchRecentCheckinsSince(since);
         if (!cancelled) setRecentCheckins(next);
       } catch {

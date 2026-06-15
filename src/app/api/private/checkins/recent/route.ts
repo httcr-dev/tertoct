@@ -35,6 +35,17 @@ function parseClassDateKeys(raw: string | null): string[] | undefined {
   return keys.length > 0 ? keys : undefined;
 }
 
+function parseClassDateKeyRange(
+  fromRaw: string | null,
+  toRaw: string | null,
+): { from: string; to: string } | undefined {
+  if (!fromRaw || !toRaw) return undefined;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fromRaw) || !/^\d{4}-\d{2}-\d{2}$/.test(toRaw)) {
+    return undefined;
+  }
+  return { from: fromRaw, to: toRaw };
+}
+
 export async function GET(req: Request) {
   const auth = await getPrivateRouteContextFromRequest(req);
   if (!auth.ok) return auth.response;
@@ -55,9 +66,17 @@ export async function GET(req: Request) {
   const classDateKeys = parseClassDateKeys(
     url.searchParams.get("classDateKeys"),
   );
+  const classDateKeyRange = parseClassDateKeyRange(
+    url.searchParams.get("fromDateKey"),
+    url.searchParams.get("toDateKey"),
+  );
 
   try {
-    const checkins = await listCheckinsSince(since, { classDateKeys });
+    const checkins = await listCheckinsSince(since, {
+      classDateKeys,
+      classDateKeyFrom: classDateKeyRange?.from,
+      classDateKeyTo: classDateKeyRange?.to,
+    });
     return NextResponse.json({ checkins });
   } catch (error) {
     captureServerError(error, {

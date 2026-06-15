@@ -42,10 +42,6 @@ function weekKeyFor(date: Date): string {
 }
 
 function baseSeed(overrides: Partial<FirestoreSeed> = {}): FirestoreSeed {
-  const now = new Date();
-  const todayKey = getDateKeyForOffset(now, UTC_OFFSET);
-  const weekKey = weekKeyFor(now);
-
   return {
     users: {
       [STUDENT_ID]: {

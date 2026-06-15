@@ -4,11 +4,17 @@ import {
   type Firestore,
 } from "firebase-admin/firestore";
 import type { StudentSummary } from "@/lib/types";
+import { toDate } from "@/lib/utils/date";
 import { getAdminFirestore } from "@/lib/auth/admin";
 
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 200;
 const MAX_TOTAL_STUDENTS = 500;
+
+function serializePaymentValidUntil(value: unknown): string | null {
+  if (value == null) return null;
+  return toDate(value)?.toISOString() ?? null;
+}
 
 export function mapStudentSummaryFromAdmin(
   doc: DocumentSnapshot,
@@ -25,7 +31,7 @@ export function mapStudentSummaryFromAdmin(
     paymentDueDay: (data.paymentDueDay as number | null | undefined) ?? null,
     monthlyPaymentPaid:
       (data.monthlyPaymentPaid as boolean | undefined) ?? false,
-    paymentValidUntil: data.paymentValidUntil ?? null,
+    paymentValidUntil: serializePaymentValidUntil(data.paymentValidUntil),
     ...(data.active !== undefined ? { active: !!data.active } : {}),
   };
 }

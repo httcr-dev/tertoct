@@ -94,7 +94,7 @@ export function CoachDashboard() {
     "checkins",
     "expirations",
   ];
-  const tabsNeedingRecentCheckins: CoachTab[] = ["overview", "checkins"];
+  const tabsNeedingRecentCheckins: CoachTab[] = ["overview"];
 
   const {
     plans,
@@ -648,14 +648,13 @@ export function CoachDashboard() {
             ))}
 
           {selectedTab === "checkins" &&
-            (recentCheckinsLoading || checkinCountsLoading ? (
+            (checkinCountsLoading ? (
               <PageLoader
                 message="Carregando check-ins..."
                 fullScreen={false}
               />
             ) : (
               <CheckinsTab
-                recentCheckins={recentCheckins}
                 selectedStudentIdForCheckins={selectedStudentIdForCheckins}
                 setSelectedStudentIdForCheckins={setSelectedStudentIdForCheckins}
                 studentsWithCounts={studentsWithCounts}

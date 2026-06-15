@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import path from "node:path";
 import { E2E_LABELS } from "./constants";
-import { coachSidebar } from "./helpers/dashboard";
+import { coachSidebar, waitForCoachCheckinsTab } from "./helpers/dashboard";
 import {
   resetE2eStudentState,
   restoreDefaultClassSchedule,
@@ -105,7 +105,6 @@ test.describe("smoke pós-deploy — coach", () => {
     await expect(page.getByText(E2E_LABELS.planName).first()).toBeVisible();
 
     await coachSidebar(page).getByTestId("coach-tab-checkins").click();
-    await expect(page.locator("header h1")).toHaveText("Check-Ins");
-    await expect(page.locator('input[type="date"]')).toBeVisible();
+    await waitForCoachCheckinsTab(page);
   });
 });

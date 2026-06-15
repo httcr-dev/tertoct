@@ -4,11 +4,36 @@
 
 import { startOfWeek } from "@/lib/utils/date";
 
+export type BusinessWeek = "current" | "previous";
+
 /**
  * Gets the start of the current business week (Monday)
  */
 export function getWeekStart(date: Date = new Date()): Date {
   return startOfWeek(date);
+}
+
+/** Anchor date for current or previous business week. */
+export function getBusinessWeekAnchor(
+  week: BusinessWeek,
+  now: Date = new Date(),
+): Date {
+  const anchor = new Date(now);
+  if (week === "previous") {
+    anchor.setDate(anchor.getDate() - 7);
+  }
+  return anchor;
+}
+
+export function getWeekDateKeysForWeek(
+  week: BusinessWeek,
+  now: Date = new Date(),
+): string[] {
+  return getWeekDateKeys(getBusinessWeekAnchor(week, now));
+}
+
+export function getWeekLabel(week: BusinessWeek): string {
+  return week === "current" ? "Semana atual" : "Semana passada";
 }
 
 /**

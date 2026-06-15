@@ -36,6 +36,7 @@ global.fetch = mockFetch as typeof fetch;
 import {
   fetchAllStudentsForCoach,
   fetchCheckinCountsByCoach,
+  fetchCheckinsForHistoryPeriod,
   fetchCurrentWeekCheckins,
   fetchRecentCheckinsSince,
   fetchStudentsForCoach,
@@ -174,6 +175,47 @@ describe("dashboardService", () => {
     listenCoaches(jest.fn(), onError);
 
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
+  });
+
+  it("fetchCheckinsForHistoryPeriod passes month range to private API", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        checkins: [{ id: "m1", createdAt: "2026-03-15T12:00:00.000Z" }],
+      }),
+    });
+
+    const result = await fetchCheckinsForHistoryPeriod({
+      classDateKeyFrom: "2026-03-01",
+      classDateKeyTo: "2026-03-31",
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining("fromDateKey=2026-03-01"),
+      expect.objectContaining({ credentials: "include" }),
+    );
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining("toDateKey=2026-03-31"),
+      expect.any(Object),
+    );
+    expect(result[0].id).toBe("m1");
+    expect(result[0].createdAt).toEqual(new Date("2026-03-15T12:00:00.000Z"));
+  });
+
+  it("fetchCheckinsForHistoryPeriod passes week keys to private API", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ checkins: [] }),
+    });
+
+    await fetchCheckinsForHistoryPeriod({
+      classDateKeys: ["2026-03-23", "2026-03-24", "2026-03-25"],
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining("classDateKeys=2026-03-23"),
+      expect.any(Object),
+    );
   });
 
   it("fetchRecentCheckinsSince loads from private API", async () => {

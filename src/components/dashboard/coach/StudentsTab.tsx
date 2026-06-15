@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { History, Users } from "lucide-react";
 import { StudentSummary, Plan } from "@/lib/types";
-import { isUnpaidPastDue } from "@/lib/utils/payment";
+import { getStudentPaymentInfo, type StudentPaymentInfo } from "@/lib/utils/studentPayment";
 
 interface StudentsTabProps {
   filteredStudents: StudentSummary[];
@@ -16,91 +16,6 @@ interface StudentsTabProps {
   handleAssignPlan: (studentId: string, planId: string | null) => Promise<void>;
   handleSetPaymentDay: (studentId: string, day: number | null) => Promise<void>;
   handleTogglePayment: (student: StudentSummary) => Promise<void>;
-}
-
-interface StudentPaymentInfo {
-  situation: string;
-  situationClass: string;
-  actionLabel: string;
-  actionTitle: string;
-  actionClass: string;
-}
-
-function formatPaymentDate(date: Date): string {
-  return `${date.getDate().toString().padStart(2, "0")}/${(date.getMonth() + 1).toString().padStart(2, "0")}`;
-}
-
-function getNextValidUntilDate(dueDay: number): Date {
-  const now = new Date();
-  let targetMonth = now.getMonth() + 1;
-  let targetYear = now.getFullYear();
-  if (targetMonth > 11) {
-    targetMonth = 0;
-    targetYear += 1;
-  }
-  const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
-  const day = Math.min(dueDay, lastDay);
-  return new Date(targetYear, targetMonth, day, 23, 59, 59, 999);
-}
-
-function isMarkedPaid(student: StudentSummary): boolean {
-  if (student.paymentValidUntil) {
-    return new Date().getTime() <= student.paymentValidUntil.toDate().getTime();
-  }
-  return student.monthlyPaymentPaid === true;
-}
-
-function getStudentPaymentInfo(student: StudentSummary): StudentPaymentInfo {
-  if (student.paymentDueDay == null) {
-    return {
-      situation: "Sem vencimento",
-      situationClass: "text-zinc-400",
-      actionLabel: "—",
-      actionTitle: "Defina o dia de vencimento",
-      actionClass: "",
-    };
-  }
-
-  const now = new Date();
-  const markedPaid = isMarkedPaid(student);
-  const nextUntil = formatPaymentDate(getNextValidUntilDate(student.paymentDueDay));
-  const overdue = isUnpaidPastDue(student.paymentDueDay, now);
-  const dueLabel = `dia ${student.paymentDueDay}`;
-
-  if (markedPaid) {
-    const validUntil = student.paymentValidUntil?.toDate();
-    const paidUntil = validUntil ? formatPaymentDate(validUntil) : null;
-    return {
-      situation: paidUntil ? `Pago até ${paidUntil}` : "Pago",
-      situationClass: "text-emerald-400",
-      actionLabel: "Desfazer pagamento",
-      actionTitle: overdue
-        ? "Remove confirmação · volta a atrasado"
-        : "Remove confirmação · volta a no prazo",
-      actionClass:
-        "border-zinc-600/50 bg-zinc-800/60 text-zinc-200 hover:bg-zinc-800",
-    };
-  }
-
-  if (overdue) {
-    return {
-      situation: `Atrasado · ${dueLabel}`,
-      situationClass: "text-red-400",
-      actionLabel: "Confirmar pagamento",
-      actionTitle: `Registra pagamento até ${nextUntil} e libera check-in`,
-      actionClass:
-        "border-emerald-500/35 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20",
-    };
-  }
-
-  return {
-    situation: `No prazo · ${dueLabel}`,
-    situationClass: "text-amber-400",
-    actionLabel: "Confirmar pagamento",
-    actionTitle: `Registra pagamento válido até ${nextUntil}`,
-    actionClass:
-      "border-emerald-500/35 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20",
-  };
 }
 
 const thClass =
