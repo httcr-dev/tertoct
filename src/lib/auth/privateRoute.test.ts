@@ -55,6 +55,7 @@ describe("getPrivateRouteContext", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     clearRoleCache();
+    mockVerifyToken.mockReset();
     mockCookies.mockResolvedValue({
       get: (name: string) =>
         name === "authToken" ? { value: "token-abc" } : undefined,
@@ -169,7 +170,7 @@ describe("getPrivateRouteContext", () => {
     if (!result.ok) expect(result.response.status).toBe(401);
   });
 
-  it("falls back to JWT role when Firestore role lookup fails", async () => {
+  it("returns 503 when Firestore role lookup fails for privileged JWT role", async () => {
     mockVerifyToken.mockResolvedValueOnce({ uid: "u1", role: "coach" });
     mockGetAdminFirestore.mockReturnValue({
       collection: () => ({
@@ -183,8 +184,26 @@ describe("getPrivateRouteContext", () => {
 
     const result = await getPrivateRouteContext();
 
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.response.status).toBe(503);
+  });
+
+  it("falls back to JWT role when Firestore role lookup fails for student", async () => {
+    mockVerifyToken.mockResolvedValueOnce({ uid: "u1", role: "student" });
+    mockGetAdminFirestore.mockReturnValue({
+      collection: () => ({
+        doc: () => ({
+          get: async () => {
+            throw new Error("firestore unavailable");
+          },
+        }),
+      }),
+    });
+
+    const result = await getPrivateRouteContext();
+
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.context.role).toBe("coach");
+    if (result.ok) expect(result.context.role).toBe("student");
   });
 
   it("uses strict verify for mutation requests", async () => {
@@ -232,6 +251,118 @@ describe("getPrivateRouteContext", () => {
       "token-abc",
       (await import("./verifyTokenOptions")).getStrictVerifyTokenOptions(),
     );
+  });
+
+  it("maps coach boolean claim to coach role", async () => {
+    mockVerifyToken.mockResolvedValueOnce({ uid: "u1", coach: true });
+
+    const result = await getPrivateRouteContext();
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.context.role).toBe("coach");
+  });
+
+  it("maps student boolean claim to student role", async () => {
+    mockVerifyToken.mockResolvedValueOnce({ uid: "u1", student: true });
+
+    const result = await getPrivateRouteContext();
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.context.role).toBe("student");
+  });
+
+  it("uses OPTIONS method with fast verify", async () => {
+    const { getPrivateRouteContextFromRequest } = await import("./privateRoute");
+    mockVerifyToken.mockResolvedValueOnce({ uid: "u1", role: "student" });
+
+    await getPrivateRouteContextFromRequest(
+      new Request("http://localhost/api/private/checkins/counts", {
+        method: "OPTIONS",
+      }),
+    );
+
+    expect(mockVerifyToken).toHaveBeenCalledWith(
+      "token-abc",
+      getFastVerifyTokenOptions(),
+    );
+  });
+
+  it("returns 503 when Firestore lookup fails for admin JWT role", async () => {
+    mockVerifyToken.mockResolvedValueOnce({ uid: "u1", admin: true });
+    mockGetAdminFirestore.mockReturnValue({
+      collection: () => ({
+        doc: () => ({
+          get: async () => {
+            throw new Error("firestore unavailable");
+          },
+        }),
+      }),
+    });
+
+    const result = await getPrivateRouteContext();
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.response.status).toBe(503);
+  });
+
+  it("keeps JWT role when Firestore user doc has no role field", async () => {
+    mockVerifyToken.mockResolvedValueOnce({ uid: "u1", role: "coach" });
+    mockGetAdminFirestore.mockReturnValue({
+      collection: () => ({
+        doc: () => ({
+          get: async () => ({
+            exists: true,
+            data: () => ({ name: "No role field" }),
+          }),
+        }),
+      }),
+    });
+
+    const result = await getPrivateRouteContext();
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.context.role).toBe("coach");
+  });
+
+  it("uses strict verify for POST requests by default", async () => {
+    const { getPrivateRouteContextFromRequest } = await import("./privateRoute");
+    mockVerifyToken.mockResolvedValueOnce({ uid: "u1", role: "student" });
+
+    await getPrivateRouteContextFromRequest(
+      new Request("http://localhost/api/private/checkins/counts", {
+        method: "POST",
+      }),
+    );
+
+    expect(mockVerifyToken).toHaveBeenCalledWith(
+      "token-abc",
+      (await import("./verifyTokenOptions")).getStrictVerifyTokenOptions(),
+    );
+  });
+
+  it("uses fast verify for HEAD requests", async () => {
+    const { getPrivateRouteContextFromRequest } = await import("./privateRoute");
+    mockVerifyToken.mockResolvedValueOnce({ uid: "u1", role: "student" });
+
+    await getPrivateRouteContextFromRequest(
+      new Request("http://localhost/api/private/checkins/counts", {
+        method: "HEAD",
+      }),
+    );
+
+    expect(mockVerifyToken).toHaveBeenCalledWith(
+      "token-abc",
+      getFastVerifyTokenOptions(),
+    );
+  });
+
+  it("skips Firestore role lookup when session uid is missing", async () => {
+    mockVerifyToken.mockResolvedValueOnce({ role: "coach" });
+
+    const result = await getPrivateRouteContext();
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.context.role).toBe("coach");
   });
 
   it("reuses cached Firestore role within TTL", async () => {

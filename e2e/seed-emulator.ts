@@ -28,7 +28,7 @@ export async function seedEmulatorAndCreateTokens(): Promise<E2eAuthTokens> {
     "checkins",
     "checkinCounters",
     "classCheckinCounters",
-    "feedback",
+    "feedbacks",
   ]);
 
   const { studentUid, coachUid, planId, classId } = E2E_IDS;

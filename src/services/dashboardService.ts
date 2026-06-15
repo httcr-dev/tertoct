@@ -1,15 +1,13 @@
 import {
-  getDocs,
   onSnapshot,
   orderBy,
   query,
-  Timestamp,
   where,
   type Unsubscribe,
 } from "firebase/firestore";
 import type { CheckIn, Plan, StudentSummary } from "@/lib/types";
-import { mapCheckin, mapPlan } from "@/lib/firestore/mappers";
-import { checkinsCol, plansCol, publicProfilesCol, usersCol } from "@/lib/firestore/refs";
+import { mapPlan } from "@/lib/firestore/mappers";
+import { plansCol, publicProfilesCol } from "@/lib/firestore/refs";
 
 type SnapshotErrorHandler = (error: unknown) => void;
 
@@ -21,35 +19,6 @@ export function listenPlans(
     query(plansCol(), orderBy("name", "asc")),
     (snap) => {
       onData(snap.docs.map(mapPlan));
-    },
-    onError,
-  );
-}
-
-export function listenStudents(
-  onData: (students: StudentSummary[]) => void,
-  onError?: SnapshotErrorHandler,
-): Unsubscribe {
-  return onSnapshot(
-    query(usersCol(), where("role", "==", "student")),
-    (snap) => {
-      const next: StudentSummary[] = snap.docs.map((docSnap) => {
-        const data = docSnap.data();
-        return {
-          id: docSnap.id,
-          name: data.name ?? null,
-          email: data.email ?? null,
-          phone: data.phone ?? null,
-          photoURL: data.photoURL ?? null,
-          planId: data.planId ?? null,
-          weeklyCheckIns: 0,
-          paymentDueDay: data.paymentDueDay ?? null,
-          monthlyPaymentPaid: data.monthlyPaymentPaid ?? false,
-          paymentValidUntil: data.paymentValidUntil ?? null,
-          ...(data.active !== undefined ? { active: !!data.active } : {}),
-        };
-      });
-      onData(next);
     },
     onError,
   );
@@ -80,6 +49,7 @@ export function listenCoaches(
 }
 
 const COACH_COUNTS_POLL_MS = 120_000;
+const COACH_STUDENTS_POLL_MS = 60_000;
 
 /** Coach dashboard: 30-day check-in counts via private API (no client listener on all checkins). */
 export async function fetchCheckinCountsByCoach(
@@ -106,109 +76,117 @@ export function getCoachCheckinCountsPollIntervalMs(): number {
   return COACH_COUNTS_POLL_MS;
 }
 
-export function listenCheckinCountsSince(
-  since: Date,
-  onData: (counts: Map<string, number>) => void,
-  onError?: SnapshotErrorHandler,
-): Unsubscribe {
-  return onSnapshot(
-    query(checkinsCol(), where("createdAt", ">=", Timestamp.fromDate(since))),
-    (snap) => {
-      const counts = new Map<string, number>();
-      snap.forEach((d) => {
-        const uid = d.data().userId;
-        if (uid) counts.set(uid, (counts.get(uid) ?? 0) + 1);
-      });
-      onData(counts);
-    },
-    onError,
-  );
+export function getCoachStudentsPollIntervalMs(): number {
+  return COACH_STUDENTS_POLL_MS;
 }
 
+type StudentsPageResponse = {
+  students?: StudentSummary[];
+  nextCursor?: string | null;
+};
+
+/** Coach dashboard: paginated students via private API. */
+export async function fetchStudentsForCoach(options?: {
+  limit?: number;
+  cursor?: string;
+}): Promise<StudentsPageResponse> {
+  const params = new URLSearchParams();
+  if (options?.limit != null) {
+    params.set("limit", String(options.limit));
+  }
+  if (options?.cursor) {
+    params.set("cursor", options.cursor);
+  }
+  const qs = params.toString();
+  const response = await fetch(
+    `/api/private/users/students${qs ? `?${qs}` : ""}`,
+    { credentials: "include" },
+  );
+  if (!response.ok) {
+    throw new Error("Failed to load students");
+  }
+  return (await response.json()) as StudentsPageResponse;
+}
+
+/** Loads all student pages for coach dashboards. */
+export async function fetchAllStudentsForCoach(): Promise<StudentSummary[]> {
+  const all: StudentSummary[] = [];
+  let cursor: string | undefined;
+
+  do {
+    const page = await fetchStudentsForCoach({ limit: 100, cursor });
+    if (Array.isArray(page.students)) {
+      all.push(...page.students);
+    }
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor);
+
+  return all;
+}
+
+type CoachCheckinsQuery = {
+  since?: Date;
+  days?: number;
+  classDateKeys?: string[];
+  classDateKeyFrom?: string;
+  classDateKeyTo?: string;
+};
+
+async function fetchCoachCheckinsFromApi(
+  query: CoachCheckinsQuery,
+): Promise<CheckIn[]> {
+  const params = new URLSearchParams();
+  if (query.since) {
+    params.set("since", query.since.toISOString());
+  } else if (query.days != null) {
+    params.set("days", String(query.days));
+  }
+  if (query.classDateKeys && query.classDateKeys.length > 0) {
+    params.set("classDateKeys", query.classDateKeys.join(","));
+  }
+  if (query.classDateKeyFrom && query.classDateKeyTo) {
+    params.set("fromDateKey", query.classDateKeyFrom);
+    params.set("toDateKey", query.classDateKeyTo);
+  }
+
+  const response = await fetch(
+    `/api/private/checkins/recent?${params.toString()}`,
+    { credentials: "include" },
+  );
+  if (!response.ok) {
+    throw new Error("Failed to load check-ins");
+  }
+  const body = (await response.json()) as {
+    checkins?: Array<CheckIn & { createdAt: string }>;
+  };
+  if (!Array.isArray(body.checkins)) return [];
+  return body.checkins.map((item) => ({
+    ...item,
+    createdAt: new Date(item.createdAt),
+  }));
+}
+
+/** Coach dashboard: check-ins since `since` via private API. */
 export async function fetchRecentCheckinsSince(since: Date): Promise<CheckIn[]> {
-  const snap = await getDocs(
-    query(
-      checkinsCol(),
-      where("createdAt", ">=", Timestamp.fromDate(since)),
-      orderBy("createdAt", "desc"),
-    ),
-  );
-  return snap.docs.map(mapCheckin);
+  return fetchCoachCheckinsFromApi({ since });
 }
 
-/**
- * Fetches check-ins within a specific date range based on createdAt
- */
-export async function fetchCheckinsByDateRange(
-  startDate: Date,
-  endDate: Date,
+/** Coach check-in history for a week/month period. */
+export async function fetchCheckinsForHistoryPeriod(
+  query: Pick<
+    CoachCheckinsQuery,
+    "classDateKeys" | "classDateKeyFrom" | "classDateKeyTo"
+  >,
 ): Promise<CheckIn[]> {
-  const snap = await getDocs(
-    query(
-      checkinsCol(),
-      where("createdAt", ">=", Timestamp.fromDate(startDate)),
-      where("createdAt", "<=", Timestamp.fromDate(endDate)),
-      orderBy("createdAt", "desc"),
-    ),
-  );
-  return snap.docs.map(mapCheckin);
+  return fetchCoachCheckinsFromApi(query);
 }
 
-/**
- * Fetches check-ins for specific date keys (useful for business week filtering)
- * Note: Firestore 'in' query has a limit of 10 values, so we batch if needed
- */
-export async function fetchCheckinsByDateKeys(
-  dateKeys: string[],
+/** Coach dashboard: current business week check-ins via private API. */
+export async function fetchCurrentWeekCheckins(
+  classDateKeys: string[],
 ): Promise<CheckIn[]> {
-  if (dateKeys.length === 0) return [];
-  
-  // If we have 5 or fewer keys, use single query
-  if (dateKeys.length <= 5) {
-    const snap = await getDocs(
-      query(
-        checkinsCol(),
-        where("classDateKey", "in", dateKeys),
-        orderBy("createdAt", "desc"),
-      ),
-    );
-    return snap.docs.map(mapCheckin);
-  }
-  
-  // For more than 5 keys, batch the queries
-  const allCheckins: CheckIn[] = [];
-  for (let i = 0; i < dateKeys.length; i += 5) {
-    const batch = dateKeys.slice(i, i + 5);
-    const snap = await getDocs(
-      query(
-        checkinsCol(),
-        where("classDateKey", "in", batch),
-        orderBy("createdAt", "desc"),
-      ),
-    );
-    allCheckins.push(...snap.docs.map(mapCheckin));
-  }
-  
-  // Sort by createdAt descending
-  allCheckins.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  return allCheckins;
-}
-
-/**
- * Fetches all check-ins for the current business week (Monday to Friday)
- */
-export async function fetchCurrentWeekCheckins(): Promise<CheckIn[]> {
-  // Get all check-ins from the last 7 days to ensure we catch all relevant ones
-  const weekAgo = new Date();
-  weekAgo.setDate(weekAgo.getDate() - 7);
-  
-  const snap = await getDocs(
-    query(
-      checkinsCol(),
-      where("createdAt", ">=", Timestamp.fromDate(weekAgo)),
-      orderBy("createdAt", "desc"),
-    ),
-  );
-  
-  return snap.docs.map(mapCheckin);
+  return fetchCoachCheckinsFromApi({
+    days: 7,
+    classDateKeys,
+  });
 }

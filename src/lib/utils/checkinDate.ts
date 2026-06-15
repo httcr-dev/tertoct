@@ -80,16 +80,13 @@ export function getAllowedCheckinDateKeys(reference = new Date()): string[] {
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + 4);
 
-  while (cursor <= weekEnd) {
-    const weekday = cursor.getDay();
-    if (weekday >= 1 && weekday <= 5) {
-      const key = localDateToDateKey(cursor);
-      if (!isPastDateKey(key, todayKey)) {
-        keys.push(key);
+    while (cursor <= weekEnd) {
+      const weekday = cursor.getDay();
+      if (weekday >= 1 && weekday <= 5) {
+        keys.push(localDateToDateKey(cursor));
       }
+      cursor.setDate(cursor.getDate() + 1);
     }
-    cursor.setDate(cursor.getDate() + 1);
-  }
 
   return keys;
 }

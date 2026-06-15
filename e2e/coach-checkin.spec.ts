@@ -1,6 +1,10 @@
 import { test, expect } from "@playwright/test";
 import { E2E_LABELS } from "./constants";
-import { coachSidebar } from "./helpers/dashboard";
+import {
+  coachSidebar,
+  filterCoachCheckins,
+  waitForCoachCheckinsTab,
+} from "./helpers/dashboard";
 import { performAdvanceCheckin } from "./helpers/checkin";
 import {
   dateKeyFromToday,
@@ -46,12 +50,11 @@ test.describe("coach — acompanhamento de check-ins", () => {
 
     await page.goto("/dashboard");
     await coachSidebar(page).getByTestId("coach-tab-checkins").click();
-    await expect(page.locator("header h1")).toHaveText("Check-Ins", {
-      timeout: 30_000,
+    await waitForCoachCheckinsTab(page);
+    await filterCoachCheckins(page, {
+      weekDate: targetDate,
+      studentName: E2E_LABELS.studentName,
     });
-
-    await page.locator('input[type="date"]').fill(targetDate);
-    await page.locator("select").nth(1).selectOption({ label: E2E_LABELS.studentName });
 
     const checkinCard = page
       .locator("main .dashboard-card.group")

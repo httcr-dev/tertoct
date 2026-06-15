@@ -24,19 +24,6 @@ export async function ensureUserDocument(user: User): Promise<AppUserProfile> {
       createdAt: serverTimestamp(),
     });
 
-    if (profile.role === "coach" || profile.role === "admin") {
-      await setDoc(
-        publicProfileRef,
-        {
-          name: profile.name ?? null,
-          photoURL: profile.photoURL ?? null,
-          role: profile.role,
-          bio: null,
-        },
-        { merge: true },
-      );
-    }
-
     return {
       id: user.uid,
       ...profile,

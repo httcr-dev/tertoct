@@ -1,4 +1,5 @@
 import type { StudentSummary } from "@/lib/types";
+import { parseApiErrorMessage } from "@/lib/utils/parseApiError";
 
 export async function assignPlan(
   studentId: string,
@@ -10,7 +11,7 @@ export async function assignPlan(
     body: JSON.stringify({ action: "assign-plan", planId }),
   });
   if (!response.ok) {
-    throw new Error("Failed to assign plan");
+    throw new Error(await parseApiErrorMessage(response, "Falha ao atribuir plano"));
   }
 }
 
@@ -24,7 +25,9 @@ export async function setPaymentDay(
     body: JSON.stringify({ action: "set-payment-day", day }),
   });
   if (!response.ok) {
-    throw new Error("Failed to update payment day");
+    throw new Error(
+      await parseApiErrorMessage(response, "Falha ao atualizar dia de pagamento"),
+    );
   }
 }
 
@@ -35,7 +38,9 @@ export async function togglePayment(student: StudentSummary): Promise<void> {
     body: JSON.stringify({ action: "toggle-payment" }),
   });
   if (!response.ok) {
-    throw new Error("Failed to toggle payment");
+    throw new Error(
+      await parseApiErrorMessage(response, "Falha ao alternar pagamento"),
+    );
   }
 }
 
@@ -48,7 +53,9 @@ export async function toggleUserActive(
     body: JSON.stringify({ action: "toggle-active" }),
   });
   if (!response.ok) {
-    throw new Error("Failed to toggle user active");
+    throw new Error(
+      await parseApiErrorMessage(response, "Falha ao alternar status do aluno"),
+    );
   }
 }
 
@@ -62,6 +69,6 @@ export async function updateUserPhone(
     body: JSON.stringify({ action: "update-phone", phone }),
   });
   if (!response.ok) {
-    throw new Error("Failed to update phone");
+    throw new Error(await parseApiErrorMessage(response, "Falha ao atualizar telefone"));
   }
 }

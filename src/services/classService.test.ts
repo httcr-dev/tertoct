@@ -66,6 +66,19 @@ describe("listenActiveClasses", () => {
       expect.objectContaining({ id: "c2", startTime: "18:00" }),
     ]);
   });
+  it("listenActiveClasses forwards snapshot errors", () => {
+    const onError = jest.fn();
+    mockOnSnapshot.mockImplementationOnce(
+      (_q: unknown, _onNext: unknown, onErr: (error: Error) => void) => {
+        onErr(new Error("permission denied"));
+        return () => undefined;
+      },
+    );
+
+    listenActiveClasses(jest.fn(), onError);
+
+    expect(onError).toHaveBeenCalledWith(expect.any(Error));
+  });
 });
 
 describe("fetchClassCountersForDate", () => {
@@ -76,6 +89,9 @@ describe("fetchClassCountersForDate", () => {
         cb({ data: () => ({ classId: "c2", count: 1 }) });
         cb({ data: () => ({ classId: "", count: 5 }) });
         cb({ data: () => ({ classId: "c3", count: "x" }) });
+        cb({ data: () => ({ classId: 99, count: 4 }) });
+        cb({ data: () => ({ classId: null, count: 2 }) });
+        cb({ data: () => null as unknown as object });
       },
     });
 
@@ -96,17 +112,34 @@ describe("listenClassCountersForDate", () => {
       (_q: unknown, onNext: (snap: { forEach: (cb: (d: { data: () => object }) => void) => void }) => void) => {
         onNext({
           forEach: (cb) => {
+            cb({ data: () => ({ classId: 123, count: 2 }) });
             cb({ data: () => ({ classId: "c1", count: 2 }) });
+            cb({ data: () => ({ count: 1 }) });
+            cb({ data: () => undefined as unknown as object });
+            cb({ data: () => ({ classId: "c2", count: "bad" }) });
           },
         });
         return () => undefined;
       },
     );
 
-    listenClassCountersForDate("2026-06-02", onData);
+    listenClassCountersForDate("2026-06-01", onData);
 
-    expect(onData).toHaveBeenCalledWith(expect.any(Map));
     expect(onData.mock.calls[0][0].get("c1")).toBe(2);
+  });
+
+  it("listenClassCountersForDate forwards snapshot errors", () => {
+    const onError = jest.fn();
+    mockOnSnapshot.mockImplementationOnce(
+      (_q: unknown, _onNext: unknown, onErr: (error: Error) => void) => {
+        onErr(new Error("denied"));
+        return () => undefined;
+      },
+    );
+
+    listenClassCountersForDate("2026-06-01", jest.fn(), onError);
+
+    expect(onError).toHaveBeenCalledWith(expect.any(Error));
   });
 });
 
@@ -154,6 +187,20 @@ describe("class mutations via API", () => {
         active: true,
         utcOffsetMinutes: -180,
       }),
-    ).rejects.toThrow("Failed to create class");
+    ).rejects.toThrow("Falha ao criar turma");
+  });
+
+  it("throws when update API fails", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false });
+    await expect(updateGymClass("class-1", { name: "Nova" })).rejects.toThrow(
+      "Falha ao atualizar turma",
+    );
+  });
+
+  it("throws when delete API fails", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false });
+    await expect(deleteGymClass("class-1")).rejects.toThrow(
+      "Falha ao excluir turma",
+    );
   });
 });

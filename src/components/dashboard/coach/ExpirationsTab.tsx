@@ -8,6 +8,7 @@ import {
   MUTATION_TOAST_MIN_MS,
   withMinDuration,
 } from "@/lib/utils/withMinDuration";
+import { getEffectiveDueDate } from "@/lib/utils/studentPayment";
 
 interface ExpirationsTabProps {
   students: StudentSummary[];
@@ -60,32 +61,6 @@ export function ExpirationsTab({
     } finally {
       setSavingPhoneId(null);
     }
-  };
-
-  // Helper to calculate effective due date
-  const getEffectiveDueDate = (student: StudentSummary): Date | null => {
-    const now = new Date();
-    if (student.paymentValidUntil) {
-      const d = student.paymentValidUntil.toDate();
-      return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    }
-
-    if (!student.paymentDueDay) return null;
-
-    let targetMonth = now.getMonth();
-    let targetYear = now.getFullYear();
-
-    if (student.monthlyPaymentPaid) {
-      targetMonth += 1;
-      if (targetMonth > 11) {
-        targetMonth = 0;
-        targetYear += 1;
-      }
-    }
-
-    const lastDayOfMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
-    const day = Math.min(student.paymentDueDay, lastDayOfMonth);
-    return new Date(targetYear, targetMonth, day);
   };
 
   const processedStudents = useMemo(() => {

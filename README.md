@@ -53,6 +53,32 @@ npm run test:e2e
 
 On first run (or after upgrading `@playwright/test`), browsers are installed automatically via `pretest:e2e`. To install manually: `npm run playwright:install`.
 
+### Pre-commit (Husky)
+
+After `npm install`, every `git commit` runs:
+
+1. `eslint` + `tsc --noEmit`
+2. `jest` (unit/integration)
+3. Firestore rules tests (emulador)
+4. Playwright E2E (emuladores Auth + Firestore)
+5. Se `firestore.rules` ou `firestore.indexes.json` estiverem no commit → deploy em **dev** (`tertoct-4fee4`, alias `dev` no `.firebaserc`)
+
+```bash
+# Rodar manualmente (mesmo fluxo do hook)
+npm run precommit
+
+# Pular E2E (commit mais rápido, use só quando necessário)
+PRE_COMMIT_SKIP_E2E=1 git commit -m "..."
+
+# Pular deploy Firestore dev
+SKIP_FIRESTORE_DEV_DEPLOY=1 git commit -m "..."
+
+# Desabilitar Husky por um commit
+HUSKY=0 git commit -m "..."
+```
+
+Deploy dev exige `firebase login` (CLI autenticada). Projeto dev padrão: alias `dev` → `tertoct-4fee4`. Override: `FIREBASE_DEV_PROJECT=outro-alias`.
+
 ### Firestore data model
 
 - `users/{uid}`: profile, `role` (`admin | coach | student`), `planId`, payment fields, `active`

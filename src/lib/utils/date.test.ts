@@ -75,6 +75,19 @@ describe("toDate", () => {
     expect(result!.getTime()).toBe(1735689600 * 1000);
   });
 
+  it("handles admin Firestore JSON with _seconds", () => {
+    const secondsObj = { _seconds: 1735689600, _nanoseconds: 0 };
+    const result = toDate(secondsObj);
+    expect(result).toBeInstanceOf(Date);
+    expect(result!.getTime()).toBe(1735689600 * 1000);
+  });
+
+  it("parses ISO date strings", () => {
+    const result = toDate("2025-07-01T00:00:00.000Z");
+    expect(result).toBeInstanceOf(Date);
+    expect(result!.toISOString()).toBe("2025-07-01T00:00:00.000Z");
+  });
+
   it("returns null for unknown object shapes", () => {
     expect(toDate({ foo: "bar" })).toBeNull();
     expect(toDate({ notADate: true })).toBeNull();

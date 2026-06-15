@@ -27,3 +27,31 @@ export async function waitForCoachDashboard(page: Page): Promise<void> {
 export function coachSidebar(page: Page) {
   return page.locator("aside");
 }
+
+export async function waitForCoachCheckinsTab(page: Page): Promise<void> {
+  await expect(page.locator("header h1")).toHaveText("Check-Ins", {
+    timeout: 30_000,
+  });
+  await expect(
+    page.getByRole("heading", { name: "Histórico de Check-Ins" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Período do histórico")).toBeVisible({
+    timeout: 30_000,
+  });
+}
+
+export async function filterCoachCheckins(
+  page: Page,
+  options: { studentName?: string; weekDate?: string } = {},
+): Promise<void> {
+  const periodSelect = page.getByLabel("Período do histórico");
+  if (options.weekDate) {
+    await periodSelect.selectOption("pick-week");
+    await page.getByLabel("Escolher semana").fill(options.weekDate);
+  }
+  if (options.studentName) {
+    await page
+      .getByLabel("Filtrar por aluno")
+      .selectOption({ label: options.studentName });
+  }
+}

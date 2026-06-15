@@ -1,17 +1,5 @@
-import type { AppUserProfile, DateLikeTimestamp } from "@/lib/firebase";
-
-function toPaymentDate(value: DateLikeTimestamp): Date | null {
-  if (value instanceof Date) return value;
-  if (typeof value === "string") {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  }
-  if (typeof value?.toDate === "function") {
-    return value.toDate();
-  }
-  return null;
-}
-
+import type { AppUserProfile } from "@/lib/firebase";
+import { toDate } from "@/lib/utils/date";
 /** Last moment of the due day in a calendar month (handles shorter months). */
 export function endOfDueDayInMonth(
   year: number,
@@ -53,7 +41,7 @@ export function isPaymentOverdue(
 
   if (validUntil) {
     try {
-      const d = toPaymentDate(validUntil);
+      const d = toDate(validUntil);
       if (!d) return false;
       return now.getTime() > d.getTime();
     } catch {

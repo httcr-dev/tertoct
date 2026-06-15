@@ -2,14 +2,15 @@
 
 import { useEffect, useState } from "react";
 import type { CheckIn, GymClass, Plan, StudentSummary } from "@/lib/types";
-import { getWeekStart } from "@/lib/utils/weekFilters";
+import { getBusinessWeekAnchor, getWeekStart } from "@/lib/utils/weekFilters";
 import {
+  fetchAllStudentsForCoach,
   fetchCheckinCountsByCoach,
   fetchRecentCheckinsSince,
   getCoachCheckinCountsPollIntervalMs,
+  getCoachStudentsPollIntervalMs,
   listenCoaches,
   listenPlans,
-  listenStudents,
 } from "@/services/dashboardService";
 import { listenActiveClasses } from "@/services/classService";
 
@@ -77,18 +78,34 @@ export function useCoachDashboardData(options: UseCoachDashboardDataOptions) {
         markLoaded("classes");
       },
     );
-    const unsubStudents = listenStudents(
-      (next) => {
-        setStudents(next);
-        markLoaded("students");
-      },
-      () => emptyOnPermissionError(setStudents, [], "students"),
-    );
+
+    let studentsCancelled = false;
+    const loadStudents = async () => {
+      try {
+        const next = await fetchAllStudentsForCoach();
+        if (!studentsCancelled) setStudents(next);
+      } catch {
+        if (!studentsCancelled) setStudents([]);
+      } finally {
+        if (!studentsCancelled) markLoaded("students");
+      }
+    };
+    void loadStudents();
+    const studentsInterval = window.setInterval(() => {
+      void fetchAllStudentsForCoach()
+        .then((next) => {
+          if (!studentsCancelled) setStudents(next);
+        })
+        .catch(() => {
+          /* keep previous students on poll failure */
+        });
+    }, getCoachStudentsPollIntervalMs());
 
     return () => {
       unsubPlans();
       unsubClasses();
-      unsubStudents();
+      studentsCancelled = true;
+      window.clearInterval(studentsInterval);
     };
   }, []);
 
@@ -156,7 +173,7 @@ export function useCoachDashboardData(options: UseCoachDashboardDataOptions) {
 
     const loadRecent = async () => {
       try {
-        const since = getWeekStart();
+        const since = getWeekStart(getBusinessWeekAnchor("previous"));
         const next = await fetchRecentCheckinsSince(since);
         if (!cancelled) setRecentCheckins(next);
       } catch {

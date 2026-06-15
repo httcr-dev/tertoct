@@ -30,15 +30,18 @@ jest.mock("@/lib/security/origin", () => ({
   isTrustedMutationRequest: () => true,
 }));
 
+const mockApplyCheckinRollupIncrement = jest.fn();
+
+jest.mock("@/lib/server/checkinCountRollup", () => ({
+  applyCheckinRollupIncrement: (...args: unknown[]) =>
+    mockApplyCheckinRollupIncrement(...args),
+}));
+
 function weekKeyFor(date: Date): string {
   return startOfWeek(date).toISOString().slice(0, 10);
 }
 
 function baseSeed(overrides: Partial<FirestoreSeed> = {}): FirestoreSeed {
-  const now = new Date();
-  const todayKey = getDateKeyForOffset(now, UTC_OFFSET);
-  const weekKey = weekKeyFor(now);
-
   return {
     users: {
       [STUDENT_ID]: {
@@ -130,6 +133,7 @@ describe("POST /api/private/checkins", () => {
     expect(mock.getDoc("checkinCounters", `${STUDENT_ID}_${weekKeyFor(new Date())}`)?.count).toBe(
       1,
     );
+    expect(mockApplyCheckinRollupIncrement).toHaveBeenCalled();
   });
 
   it("allows advance check-in for a future weekday in the same week", async () => {

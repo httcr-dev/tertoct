@@ -1,10 +1,23 @@
 import { NextResponse } from "next/server";
 import { checkRateLimit } from "@/lib/auth/rateLimit";
+import { checkRateLimitMemory } from "@/lib/auth/rateLimitMemory";
 
 const WINDOW_MS = 60_000;
 
+function rateLimitedResponse(retryAfterMs: number) {
+  return NextResponse.json(
+    { error: "Too many requests" },
+    {
+      status: 429,
+      headers: {
+        "Retry-After": String(Math.ceil(retryAfterMs / 1000)),
+      },
+    },
+  );
+}
+
 /**
- * Firestore-backed rate limit for private API route handlers (distributed).
+ * Private API rate limit: in-memory for reads, Firestore for mutations.
  */
 export async function enforcePrivateApiRateLimit(
   req: Request,
@@ -13,13 +26,26 @@ export async function enforcePrivateApiRateLimit(
   const url = new URL(req.url);
   const pathname = url.pathname;
   const method = req.method.toUpperCase();
+  const isRead = method === "GET" || method === "HEAD";
 
   const isCheckinMutation =
     pathname.includes("/api/private/checkins") &&
     (method === "POST" || method === "DELETE");
 
-  const maxRequests = isCheckinMutation ? 10 : 100;
+  const maxRequests = isCheckinMutation ? 10 : isRead ? 300 : 100;
   const key = `api-private:${method}:${pathname}:${uid}`;
+
+  if (isRead) {
+    const limit = checkRateLimitMemory(key, {
+      windowMs: WINDOW_MS,
+      maxRequests,
+      failOpen: true,
+    });
+    if (!limit.allowed) {
+      return rateLimitedResponse(limit.retryAfterMs);
+    }
+    return null;
+  }
 
   const limit = await checkRateLimit(key, {
     windowMs: WINDOW_MS,
@@ -28,15 +54,7 @@ export async function enforcePrivateApiRateLimit(
   });
 
   if (!limit.allowed) {
-    return NextResponse.json(
-      { error: "Too many requests" },
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(Math.ceil(limit.retryAfterMs / 1000)),
-        },
-      },
-    );
+    return rateLimitedResponse(limit.retryAfterMs);
   }
 
   return null;

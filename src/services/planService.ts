@@ -1,4 +1,5 @@
 import type { Plan } from "@/lib/types";
+import { parseApiErrorMessage } from "@/lib/utils/parseApiError";
 
 export class PlanInUseError extends Error {
   constructor() {
@@ -22,7 +23,7 @@ export async function createPlan(
     }),
   });
   if (!response.ok) {
-    throw new Error("Failed to create plan");
+    throw new Error(await parseApiErrorMessage(response, "Falha ao criar plano"));
   }
 }
 
@@ -36,7 +37,7 @@ export async function updatePlan(
     body: JSON.stringify(fields),
   });
   if (!response.ok) {
-    throw new Error("Failed to update plan");
+    throw new Error(await parseApiErrorMessage(response, "Falha ao atualizar plano"));
   }
 }
 
@@ -48,7 +49,7 @@ export async function deletePlan(planId: string): Promise<void> {
     throw new PlanInUseError();
   }
   if (!response.ok) {
-    throw new Error("Failed to delete plan");
+    throw new Error(await parseApiErrorMessage(response, "Falha ao excluir plano"));
   }
 }
 
@@ -57,6 +58,6 @@ export async function togglePlanActive(plan: Plan): Promise<void> {
     method: "POST",
   });
   if (!response.ok) {
-    throw new Error("Failed to toggle plan");
+    throw new Error(await parseApiErrorMessage(response, "Falha ao alternar plano"));
   }
 }

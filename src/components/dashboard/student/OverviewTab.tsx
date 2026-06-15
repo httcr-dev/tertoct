@@ -1,7 +1,12 @@
-import { useMemo } from "react";
+"use client";
+
+import { useMemo, useState } from "react";
 import { List, CheckCircle, XCircle } from "lucide-react";
 import { BarChart } from "@/components/ui/BarChart";
+import { WeekChartFilter } from "@/components/ui/WeekChartFilter";
 import type { Plan, CheckIn, GymClass } from "@/lib/types";
+import type { BusinessWeek } from "@/lib/utils/weekFilters";
+import { getWeekLabel } from "@/lib/utils/weekFilters";
 import {
   canCancelCheckIn,
   formatClassDateKey,
@@ -31,6 +36,7 @@ export function OverviewTab({
   cancellingCheckInId,
   onCancelCheckIn,
 }: OverviewTabProps) {
+  const [chartWeek, setChartWeek] = useState<BusinessWeek>("current");
   const classesById = useMemo(
     () => new Map(classes.map((c) => [c.id, c])),
     [classes],
@@ -117,12 +123,15 @@ export function OverviewTab({
       </section>
 
       <section className="space-y-4">
-        <h3 className="text-lg font-semibold text-zinc-100 flex items-center gap-2">
-          <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-          Sua Atividade (semana atual)
-        </h3>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h3 className="text-lg font-semibold text-zinc-100 flex items-center gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+            Sua Atividade ({getWeekLabel(chartWeek).toLowerCase()})
+          </h3>
+          <WeekChartFilter value={chartWeek} onChange={setChartWeek} />
+        </div>
         <div className="dashboard-card p-6 shadow-inner shadow-amber-500/5">
-          <BarChart dataItems={checkIns} range="week" />
+          <BarChart dataItems={checkIns} range="week" week={chartWeek} />
         </div>
       </section>
 

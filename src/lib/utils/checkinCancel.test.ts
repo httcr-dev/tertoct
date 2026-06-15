@@ -1,7 +1,10 @@
+import * as dateKeyModule from "./dateKey";
 import {
   canCancelCheckIn,
   formatClassDateKey,
   getCheckInCancelDeadline,
+  getCheckInClassDateKey,
+  getClassStartAt,
 } from "./checkinCancel";
 import type { CheckIn } from "@/lib/types";
 
@@ -64,5 +67,44 @@ describe("checkinCancel", () => {
         null,
       ),
     ).toBeNull();
+  });
+
+  it("uses trimmed classDateKey when valid", () => {
+    expect(
+      getCheckInClassDateKey({
+        ...baseCheckIn,
+        classDateKey: " 2026-05-19 ",
+      }),
+    ).toBe("2026-05-19");
+  });
+
+  it("canCancelCheckIn returns false when deadline is missing", () => {
+    expect(canCancelCheckIn({ ...baseCheckIn, classStartTime: "bad" }, gymClass)).toBe(
+      false,
+    );
+  });
+
+  it("uses check-in start time when gym class is missing", () => {
+    const deadline = getCheckInCancelDeadline(baseCheckIn, null);
+    expect(deadline).not.toBeNull();
+  });
+
+  it("returns null when class start cannot be parsed", () => {
+    expect(
+      getCheckInCancelDeadline(
+        { ...baseCheckIn, classStartTime: "99:99" },
+        gymClass,
+      ),
+    ).toBeNull();
+  });
+
+  it("returns null when computed class start time is invalid", () => {
+    const spy = jest
+      .spyOn(dateKeyModule, "utcDateAtLocalTime")
+      .mockReturnValueOnce(new Date(NaN));
+
+    expect(getClassStartAt(baseCheckIn, gymClass)).toBeNull();
+
+    spy.mockRestore();
   });
 });

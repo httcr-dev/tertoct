@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { startOfWeek } from "@/lib/utils/date";
+import type { BusinessWeek } from "@/lib/utils/weekFilters";
+import { getBusinessWeekAnchor } from "@/lib/utils/weekFilters";
 
 type ChartTimestampLike = {
   toDate?: () => Date;
@@ -48,10 +50,12 @@ export function BarChart({
   dataItems,
   ds = 14,
   range = "trailing",
+  week = "current",
 }: {
   dataItems: ChartDataItem[];
   ds?: number;
   range?: "trailing" | "week";
+  week?: BusinessWeek;
 }) {
   const now = new Date();
 
@@ -63,7 +67,7 @@ export function BarChart({
   if (range === "week") {
     // Semana útil: segunda a sexta (weekStart já é segunda via startOfWeek).
     slotCount = 5;
-    const weekStart = startOfWeek(now);
+    const weekStart = startOfWeek(getBusinessWeekAnchor(week, now));
     counts = Array.from({ length: slotCount }, () => 0);
     const slotKeys: string[] = [];
     days = [];

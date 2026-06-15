@@ -116,7 +116,7 @@ describe("deletePlan", () => {
       json: async () => ({}),
     });
 
-    await expect(deletePlan("plan-456")).rejects.toThrow("Failed to delete plan");
+    await expect(deletePlan("plan-456")).rejects.toThrow("Falha ao excluir plano");
   });
 });
 
@@ -130,13 +130,13 @@ describe("createPlan and updatePlan errors", () => {
         classesPerWeek: 1,
         active: true,
       }),
-    ).rejects.toThrow("Failed to create plan");
+    ).rejects.toThrow("Falha ao criar plano");
   });
 
   it("updatePlan throws when API fails", async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false });
     await expect(updatePlan("id", { name: "X" })).rejects.toThrow(
-      "Failed to update plan",
+      "Falha ao atualizar plano",
     );
   });
 
@@ -150,7 +150,7 @@ describe("createPlan and updatePlan errors", () => {
         classesPerWeek: 1,
         active: true,
       }),
-    ).rejects.toThrow("Failed to toggle plan");
+    ).rejects.toThrow("Falha ao alternar plano");
   });
 });
 

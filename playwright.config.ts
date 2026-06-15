@@ -63,6 +63,12 @@ export default defineConfig({
       },
       dependencies: ["setup"],
     },
+    {
+      name: "smoke",
+      testMatch: /smoke-post-deploy\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+      dependencies: ["setup"],
+    },
   ],
   webServer: {
     command: "npm run dev -- --port 3000",

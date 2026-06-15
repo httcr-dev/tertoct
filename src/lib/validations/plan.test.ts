@@ -5,7 +5,7 @@ jest.mock("./sanitize", () => ({
     typeof input === "string" ? input.replace(/<script[^>]*>.*?<\/script>/gi, "") : "",
 }));
 
-import { PlanCreateSchema, PlanUpdateSchema } from "./plan";
+import { PlanCreateApiSchema, PlanCreateSchema, PlanUpdateSchema } from "./plan";
 
 describe("PlanCreateSchema", () => {
   it("accepts valid plan payload and strips HTML from name", () => {
@@ -38,5 +38,32 @@ describe("PlanUpdateSchema", () => {
   it("allows partial updates", () => {
     const result = PlanUpdateSchema.parse({ active: false });
     expect(result).toEqual({ active: false });
+  });
+});
+
+describe("PlanCreateApiSchema", () => {
+  it("accepts optional description and active", () => {
+    const result = PlanCreateApiSchema.parse({
+      name: "Plano API",
+      price: 120,
+      classesPerWeek: 3,
+    });
+
+    expect(result.name).toBe("Plano API");
+    expect(result.active).toBeUndefined();
+    expect(result.description).toBeUndefined();
+  });
+
+  it("sanitizes optional description when provided", () => {
+    const result = PlanCreateApiSchema.parse({
+      name: "Plano API",
+      price: 120,
+      classesPerWeek: 3,
+      description: "<script>x</script>Desc",
+      active: false,
+    });
+
+    expect(result.description).not.toContain("<script>");
+    expect(result.active).toBe(false);
   });
 });

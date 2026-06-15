@@ -10,6 +10,7 @@ import { parseHHmm } from "@/lib/utils/time";
 import { getDateKeyForOffset, utcDateAtLocalTime } from "@/lib/utils/dateKey";
 import { assertCheckinDateKeyAllowed } from "@/lib/utils/checkinDate";
 import { isPaymentOverdue } from "@/lib/utils/payment";
+import { applyCheckinRollupIncrement } from "@/lib/server/checkinCountRollup";
 import type { AppUserProfile } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -225,6 +226,7 @@ export async function POST(req: Request) {
         weekKey,
         createdAt: new Date(),
       });
+      applyCheckinRollupIncrement(tx, db, userId);
     });
 
     return NextResponse.json({ success: true });

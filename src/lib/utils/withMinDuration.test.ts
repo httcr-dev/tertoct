@@ -56,6 +56,45 @@ describe("withMinDuration", () => {
     await expect(promise).rejects.toBe(err);
   });
 
+  it("resolves immediately when promise finishes after minimum duration", async () => {
+    jest.setSystemTime(0);
+    const promise = withMinDuration(
+      new Promise<string>((resolve) => {
+        setTimeout(() => resolve("fast-after-min"), 500);
+      }),
+      100,
+    );
+    jest.advanceTimersByTime(500);
+    await expect(promise).resolves.toBe("fast-after-min");
+  });
+
+  it("returns resolved value without delay when minimum already elapsed", async () => {
+    jest.setSystemTime(0);
+    const promise = withMinDuration(
+      new Promise<string>((resolve) => {
+        setTimeout(() => resolve("late"), 150);
+      }),
+      100,
+    );
+    jest.advanceTimersByTime(150);
+    await expect(promise).resolves.toBe("late");
+  });
+
+  it("delays rejection when promise rejects quickly", async () => {
+    let rejected = false;
+    const err = new Error("quick fail");
+    const promise = withMinDuration(Promise.reject(err), 200).catch((e) => {
+      rejected = true;
+      throw e;
+    });
+
+    await Promise.resolve();
+    expect(rejected).toBe(false);
+    jest.advanceTimersByTime(200);
+    await expect(promise).rejects.toBe(err);
+    expect(rejected).toBe(true);
+  });
+
   it("exports default mutation toast minimum", () => {
     expect(MUTATION_TOAST_MIN_MS).toBeGreaterThan(0);
   });

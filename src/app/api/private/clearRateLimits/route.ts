@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
 import { getAdminFirestore } from "@/lib/auth/admin";
+import { getPrivateRouteContextFromRequest, requireRole } from "@/lib/auth/privateRoute";
 
 /**
  * DEV-only endpoint to clear all rate limit counters from Firestore.
- * Protected by a secret token in the RATE_LIMIT_CLEAR_SECRET env var.
+ * Requires admin session + Bearer secret (RATE_LIMIT_CLEAR_SECRET).
  *
  * Usage: DELETE /api/private/clearRateLimits
  *   Authorization: Bearer <RATE_LIMIT_CLEAR_SECRET>
- *
- * This endpoint is intentionally NOT exposed in production unless the secret is set.
  */
 export async function DELETE(req: Request) {
   const secret = process.env.RATE_LIMIT_CLEAR_SECRET;
@@ -16,8 +15,13 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: "Not available" }, { status: 404 });
   }
 
-  const auth = req.headers.get("authorization");
-  if (!auth || auth !== `Bearer ${secret}`) {
+  const auth = await getPrivateRouteContextFromRequest(req);
+  if (!auth.ok) return auth.response;
+  const forbidden = requireRole(auth.context, ["admin"]);
+  if (forbidden) return forbidden;
+
+  const bearer = req.headers.get("authorization");
+  if (!bearer || bearer !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

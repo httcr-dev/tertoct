@@ -1,4 +1,4 @@
-const ROLE_CACHE_TTL_MS = 60_000;
+const ROLE_CACHE_TTL_MS = 300_000;
 
 type RoleCacheEntry = {
   role: string | null;

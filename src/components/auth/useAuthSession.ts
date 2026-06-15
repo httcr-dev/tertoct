@@ -398,7 +398,7 @@ export function useAuthSession(): AuthSessionState {
     void signOut(getFirebaseAuth()).catch((error) => {
       console.error("Background signOut failed:", error);
     });
-  }, []);
+  }, [setPending]);
 
   return {
     firebaseUser,

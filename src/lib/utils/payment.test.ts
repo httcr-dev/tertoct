@@ -41,6 +41,11 @@ describe("isUnpaidPastDue", () => {
     const now = new Date(2025, 4, 25, 12, 0, 0); // 25 May — April due passed
     expect(isUnpaidPastDue(28, now)).toBe(true);
   });
+
+  it("evaluates previous December due when checking January before month-end due day", () => {
+    const now = new Date(2025, 0, 5, 12, 0, 0); // 5 Jan — due day 31 clamps to Dec 31
+    expect(isUnpaidPastDue(31, now)).toBe(true);
+  });
 });
 
 describe("endOfDueDayInMonth", () => {
@@ -150,6 +155,47 @@ describe("isPaymentOverdue", () => {
       });
       expect(isPaymentOverdue(profile, now)).toBe(false);
     });
+
+    it("parses ISO string paymentValidUntil", () => {
+      const now = new Date(2025, 6, 2, 12, 0, 0);
+      const profile = makeProfile({
+        paymentValidUntil: "2025-07-01T00:00:00.000Z",
+      });
+      expect(isPaymentOverdue(profile, now)).toBe(true);
+    });
+
+    it("uses Firestore timestamp via toDate", () => {
+      const now = new Date(2025, 6, 2, 12, 0, 0);
+      const profile = makeProfile({
+        paymentValidUntil: {
+          toDate: () => new Date(2025, 5, 1, 0, 0, 0),
+        } as import("@/lib/types").DateLikeTimestamp,
+      });
+      expect(isPaymentOverdue(profile, now)).toBe(true);
+    });
+
+    it("falls through when paymentValidUntil parsing throws", () => {
+      const now = new Date(2025, 5, 29, 12, 0, 0);
+      const profile = makeProfile({
+        paymentDueDay: 28,
+        monthlyPaymentPaid: false,
+        paymentValidUntil: {
+          toDate: () => {
+            throw new Error("bad timestamp");
+          },
+        } as import("@/lib/types").DateLikeTimestamp,
+      });
+      expect(isPaymentOverdue(profile, now)).toBe(true);
+    });
+  });
+
+  it("returns false for unsupported paymentValidUntil shapes", () => {
+    const profile = makeProfile({
+      paymentValidUntil: 123 as unknown as import("@/lib/types").DateLikeTimestamp,
+      paymentDueDay: 28,
+      monthlyPaymentPaid: false,
+    });
+    expect(isPaymentOverdue(profile, new Date(2025, 5, 29))).toBe(false);
   });
 
   describe("fallback logic (no payment metadata)", () => {

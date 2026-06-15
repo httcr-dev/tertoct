@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPrivateRouteContextFromRequest, requireRole } from "@/lib/auth/privateRoute";
 import { enforcePrivateApiRateLimit } from "@/lib/auth/privateApiRateLimit";
-import {
-  aggregateCheckinCountsSince,
-  getDefaultCoachCountsSince,
-} from "@/lib/server/checkinCounts";
+import { getCachedCheckinCountsForDays } from "@/lib/server/checkinCounts";
 import { captureServerError } from "@/lib/observability/serverObservability";
 
 export const runtime = "nodejs";
@@ -33,13 +30,9 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const days = parseDaysParam(url.searchParams.get("days"));
-  const since =
-    days === DEFAULT_DAYS
-      ? getDefaultCoachCountsSince()
-      : new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
   try {
-    const counts = await aggregateCheckinCountsSince(since);
+    const counts = await getCachedCheckinCountsForDays(days);
     return NextResponse.json({ counts, days });
   } catch (error) {
     captureServerError(error, {
